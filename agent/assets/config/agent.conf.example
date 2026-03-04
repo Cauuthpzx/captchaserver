@@ -1,0 +1,10 @@
+# CAPTCHA Agent Configuration
+# Copy this file to agent.conf next to the executable and fill in your values
+
+# Server connection
+server_host=192.168.1.100
+server_port=8080
+
+# Agent credentials (get these from the admin dashboard)
+agent_id=CHANGE_ME
+agent_token=CHANGE_ME

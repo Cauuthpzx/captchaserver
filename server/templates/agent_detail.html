@@ -1,0 +1,68 @@
+{{define "agent_detail"}}
+{{template "layout" map "Title" .Data.Agent.Name "Active" "agents" "Data" .}}
+{{end}}
+
+{{define "content"}}
+<div class="page-header">
+    <h1>{{.Data.Agent.Name}} <span class="badge badge-{{if .Data.Online}}online{{else}}offline{{end}}" data-t="{{if .Data.Online}}online{{else}}offline{{end}}">{{if .Data.Online}}online{{else}}offline{{end}}</span></h1>
+    <div class="header-actions">
+        <span class="agent-id">ID: <code>{{.Data.Agent.ID}}</code></span>
+        <button class="btn btn-primary" onclick="sendCaptchaTo('{{.Data.Agent.ID}}')" data-t="send_captcha">Gửi CAPTCHA</button>
+    </div>
+</div>
+
+{{with .Data.Stats}}
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-value">{{.Total}}</div>
+        <div class="stat-label" data-t="total">Tổng</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value text-success">{{.Success}}</div>
+        <div class="stat-label" data-t="success">Thành công</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value text-danger">{{.Fail}}</div>
+        <div class="stat-label" data-t="fail">Thất bại</div>
+    </div>
+    <div class="stat-card stat-warning">
+        <div class="stat-value">{{.Miss}}</div>
+        <div class="stat-label" data-t="miss">Bỏ lỡ</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">{{printf "%.0f" .AvgRespMs}}ms</div>
+        <div class="stat-label" data-t="avg_resp">TB phản hồi</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">{{printf "%.1f" .SuccessRate}}%</div>
+        <div class="stat-label" data-t="success_rate">Tỉ lệ đúng</div>
+    </div>
+</div>
+{{end}}
+
+<h2 data-t="captcha_history">Lịch sử CAPTCHA</h2>
+<table class="data-table">
+    <thead>
+        <tr>
+            <th data-t="time">Thời gian</th>
+            <th data-t="captcha">Mã CAPTCHA</th>
+            <th data-t="answer">Câu trả lời</th>
+            <th data-t="result">Kết quả</th>
+            <th data-t="resp_time">Thời gian PH</th>
+        </tr>
+    </thead>
+    <tbody>
+        {{range .Data.History}}
+        <tr class="result-{{.Result}}">
+            <td>{{.SentAt.Format "2006-01-02 15:04:05"}}</td>
+            <td><code>{{.CaptchaText}}</code></td>
+            <td>{{if .Answer}}{{deref .Answer}}{{else}}-{{end}}</td>
+            <td><span class="badge badge-{{.Result}}">{{.Result}}</span></td>
+            <td>{{if .ResponseMs}}{{deref_i64 .ResponseMs}}ms{{else}}-{{end}}</td>
+        </tr>
+        {{else}}
+        <tr><td colspan="5" class="text-center" data-t="no_data">Chưa có dữ liệu</td></tr>
+        {{end}}
+    </tbody>
+</table>
+{{end}}

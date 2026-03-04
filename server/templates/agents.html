@@ -1,0 +1,75 @@
+{{define "agents"}}
+{{template "layout" map "Title" "Agents" "Active" "agents" "Data" .}}
+{{end}}
+
+{{define "content"}}
+<div class="page-header">
+    <h1 data-t="agents">Danh sách Agent</h1>
+    <div class="header-actions">
+        <button class="btn btn-primary" onclick="sendSelectedCaptcha()" data-t="send_selected">Gửi cho đã chọn</button>
+        <button class="btn btn-primary" onclick="showAddAgent()" data-t="add_agent">+ Thêm Agent</button>
+    </div>
+</div>
+
+<!-- Add Agent Modal -->
+<div id="add-agent-modal" class="modal" style="display:none">
+    <div class="modal-content">
+        <h3 data-t="add_new_agent">Thêm Agent mới</h3>
+        <input type="text" id="agent-name" class="input" data-tp="agent_name" placeholder="Tên Agent (VD: PC-NhanVien01)">
+        <div class="modal-actions">
+            <button class="btn btn-primary" onclick="addAgent()" data-t="create">Tạo</button>
+            <button class="btn" onclick="hideAddAgent()" data-t="cancel">Hủy</button>
+        </div>
+        <div id="agent-result" style="display:none" class="agent-result">
+            <p><strong>Agent ID:</strong> <code id="new-agent-id"></code></p>
+            <p><strong>Token:</strong> <code id="new-agent-token"></code></p>
+            <p class="text-warning" data-t="save_token">Lưu token này! Sẽ không hiển thị lại.</p>
+        </div>
+    </div>
+</div>
+
+<!-- Rename Modal -->
+<div id="rename-modal" class="modal" style="display:none">
+    <div class="modal-content">
+        <h3 data-t="rename_agent">Đổi tên Agent</h3>
+        <input type="hidden" id="rename-id">
+        <input type="text" id="rename-name" class="input" data-tp="new_name" placeholder="Tên mới">
+        <div class="modal-actions">
+            <button class="btn btn-primary" onclick="renameAgent()" data-t="save">Lưu</button>
+            <button class="btn" onclick="hideRename()" data-t="cancel">Hủy</button>
+        </div>
+    </div>
+</div>
+
+<table class="data-table">
+    <thead>
+        <tr>
+            <th class="col-check"><input type="checkbox" id="select-all" onchange="toggleSelectAll(this)"></th>
+            <th data-t="id">Mã</th>
+            <th data-t="name">Tên</th>
+            <th data-t="status">Trạng thái</th>
+            <th data-t="last_seen">Lần cuối</th>
+            <th data-t="actions">Thao tác</th>
+        </tr>
+    </thead>
+    <tbody id="agents-body">
+        {{range .Data.Agents}}
+        <tr id="agent-row-{{.ID}}">
+            <td><input type="checkbox" class="agent-check" value="{{.ID}}"></td>
+            <td><code>{{.ID}}</code></td>
+            <td><a href="/agents/{{.ID}}">{{.Name}}</a></td>
+            <td><span class="badge badge-{{.Status}}" data-t="{{.Status}}">{{.Status}}</span></td>
+            <td>{{if .LastSeen}}{{.LastSeen.Format "2006-01-02 15:04:05"}}{{else}}-{{end}}</td>
+            <td class="actions">
+                <button class="btn btn-sm" onclick="sendCaptchaTo('{{.ID}}')" data-t="send_captcha">Gửi CAPTCHA</button>
+                <button class="btn btn-sm" onclick="showRename('{{.ID}}', '{{.Name}}')" data-t="rename">Đổi tên</button>
+                <button class="btn btn-sm" onclick="showToken('{{.ID}}')">Token</button>
+                <button class="btn btn-sm btn-danger" onclick="deleteAgent('{{.ID}}', '{{.Name}}')" data-t="delete_item">Xóa</button>
+            </td>
+        </tr>
+        {{else}}
+        <tr><td colspan="6" class="text-center" data-t="no_agents">Chưa có Agent.</td></tr>
+        {{end}}
+    </tbody>
+</table>
+{{end}}

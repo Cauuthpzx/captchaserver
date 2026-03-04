@@ -1,0 +1,50 @@
+{{define "history"}}
+{{template "layout" map "Title" "History" "Active" "history" "Data" .}}
+{{end}}
+
+{{define "content"}}
+<div class="page-header">
+    <h1 data-t="history">Lịch sử CAPTCHA</h1>
+    <div class="header-actions">
+        <select id="filter-agent" class="input input-sm" onchange="filterHistory()">
+            <option value="" data-t="all_agents">Tất cả Agent</option>
+            {{range .Data.Agents}}
+            <option value="{{.ID}}">{{.Name}}</option>
+            {{end}}
+        </select>
+        <select id="filter-result" class="input input-sm" onchange="filterHistory()">
+            <option value="" data-t="all_results">Tất cả kết quả</option>
+            <option value="success" data-t="success">Thành công</option>
+            <option value="fail" data-t="fail">Thất bại</option>
+            <option value="miss" data-t="miss">Bỏ lỡ</option>
+        </select>
+    </div>
+</div>
+
+<table class="data-table" id="history-table">
+    <thead>
+        <tr>
+            <th data-t="time">Thời gian</th>
+            <th data-t="agent">Agent</th>
+            <th data-t="captcha">Mã CAPTCHA</th>
+            <th data-t="answer">Câu trả lời</th>
+            <th data-t="result">Kết quả</th>
+            <th data-t="resp_time">Thời gian PH</th>
+        </tr>
+    </thead>
+    <tbody id="history-body">
+        {{range .Data.History}}
+        <tr class="result-{{.Result}} history-row" data-agent="{{.AgentID}}" data-result="{{.Result}}">
+            <td>{{.SentAt.Format "2006-01-02 15:04:05"}}</td>
+            <td><a href="/agents/{{.AgentID}}">{{.AgentName}}</a></td>
+            <td><code>{{.CaptchaText}}</code></td>
+            <td>{{if .Answer}}{{deref .Answer}}{{else}}-{{end}}</td>
+            <td><span class="badge badge-{{.Result}}" data-t="{{.Result}}">{{.Result}}</span></td>
+            <td>{{if .ResponseMs}}{{deref_i64 .ResponseMs}}ms{{else}}-{{end}}</td>
+        </tr>
+        {{else}}
+        <tr><td colspan="6" class="text-center" data-t="no_data">Chưa có dữ liệu</td></tr>
+        {{end}}
+    </tbody>
+</table>
+{{end}}

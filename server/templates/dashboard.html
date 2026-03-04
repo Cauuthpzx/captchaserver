@@ -1,0 +1,84 @@
+{{define "dashboard"}}
+{{template "layout" map "Title" "Dashboard" "Active" "dashboard" "Data" .}}
+{{end}}
+
+{{define "content"}}
+<h1 data-t="dashboard">Trang chính</h1>
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-value" id="online-count">{{.Data.OnlineCount}}</div>
+        <div class="stat-label" data-t="online">Trực tuyến</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">{{.Data.TotalCount}}</div>
+        <div class="stat-label" data-t="total_agents">Tổng Agent</div>
+    </div>
+    <div class="stat-card stat-warning">
+        <div class="stat-value" id="miss-today">{{.Data.MissToday}}</div>
+        <div class="stat-label" data-t="miss_today">Bỏ lỡ hôm nay</div>
+    </div>
+</div>
+
+<h2 data-t="stats">Thống kê Agent</h2>
+<table class="data-table">
+    <thead>
+        <tr>
+            <th data-t="agent">Agent</th>
+            <th data-t="total">Tổng</th>
+            <th data-t="success">Thành công</th>
+            <th data-t="fail">Thất bại</th>
+            <th data-t="miss">Bỏ lỡ</th>
+            <th data-t="avg_resp">TB phản hồi</th>
+            <th data-t="success_rate">Tỉ lệ đúng</th>
+        </tr>
+    </thead>
+    <tbody>
+        {{range .Data.Stats}}
+        <tr>
+            <td><a href="/agents/{{.AgentID}}">{{.AgentName}}</a></td>
+            <td>{{.Total}}</td>
+            <td class="text-success">{{.Success}}</td>
+            <td class="text-danger">{{.Fail}}</td>
+            <td class="text-warning">{{.Miss}}</td>
+            <td>{{printf "%.0f" .AvgRespMs}}ms</td>
+            <td>
+                <div class="progress-bar">
+                    <div class="progress-fill" style="width: {{printf "%.0f" .SuccessRate}}%"></div>
+                    <span>{{printf "%.1f" .SuccessRate}}%</span>
+                </div>
+            </td>
+        </tr>
+        {{else}}
+        <tr><td colspan="7" class="text-center" data-t="no_data">Chưa có dữ liệu</td></tr>
+        {{end}}
+    </tbody>
+</table>
+
+<h2 data-t="recent">Hoạt động gần đây</h2>
+<table class="data-table">
+    <thead>
+        <tr>
+            <th data-t="time">Thời gian</th>
+            <th data-t="agent">Agent</th>
+            <th data-t="captcha">Mã CAPTCHA</th>
+            <th data-t="answer">Câu trả lời</th>
+            <th data-t="result">Kết quả</th>
+            <th data-t="resp_time">Thời gian PH</th>
+        </tr>
+    </thead>
+    <tbody>
+        {{range .Data.Recent}}
+        <tr class="result-{{.Result}}">
+            <td>{{.SentAt.Format "15:04:05"}}</td>
+            <td><a href="/agents/{{.AgentID}}">{{.AgentName}}</a></td>
+            <td><code>{{.CaptchaText}}</code></td>
+            <td>{{if .Answer}}{{deref .Answer}}{{else}}-{{end}}</td>
+            <td><span class="badge badge-{{.Result}}">{{.Result}}</span></td>
+            <td>{{if .ResponseMs}}{{deref_i64 .ResponseMs}}ms{{else}}-{{end}}</td>
+        </tr>
+        {{else}}
+        <tr><td colspan="6" class="text-center" data-t="no_data">Chưa có dữ liệu</td></tr>
+        {{end}}
+    </tbody>
+</table>
+{{end}}

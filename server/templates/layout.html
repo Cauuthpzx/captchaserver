@@ -1,0 +1,191 @@
+{{define "layout"}}
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CAPTCHA Monitor</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <script>
+    const LANG = {
+        vi: {
+            dashboard:"Trang chính",agents:"Danh sách Agent",settings:"Cài đặt",history:"Lịch sử",
+            online:"Trực tuyến",offline:"Ngoại tuyến",total_agents:"Tổng Agent",
+            miss_today:"Bỏ lỡ hôm nay",success:"Thành công",fail:"Thất bại",miss:"Bỏ lỡ",
+            pending:"Đang chờ",total:"Tổng",avg_resp:"TB phản hồi",success_rate:"Tỉ lệ đúng",
+            recent:"Hoạt động gần đây",stats:"Thống kê Agent",time:"Thời gian",
+            agent:"Agent",captcha:"Mã CAPTCHA",answer:"Câu trả lời",result:"Kết quả",
+            resp_time:"Thời gian PH",add_agent:"+ Thêm Agent",rename:"Đổi tên",
+            delete_item:"Xóa",token:"Token",last_seen:"Lần cuối",
+            actions:"Thao tác",name:"Tên",status:"Trạng thái",id:"Mã",
+            save:"Lưu cài đặt",saved:"Đã lưu!",
+            send_captcha:"Gửi CAPTCHA",send_selected:"Gửi cho đã chọn",
+            select_all:"Chọn tất cả",select_agents:"Chọn ít nhất 1 agent",
+            confirm_delete:"Xóa agent \"{name}\"? Toàn bộ lịch sử sẽ bị xóa.",
+            no_data:"Chưa có dữ liệu",no_agents:"Chưa có Agent. Nhấn \"+ Thêm Agent\" để tạo.",
+            create:"Tạo",cancel:"Hủy",new_name:"Tên mới",
+            agent_name:"Tên Agent (VD: PC-NhanVien01)",
+            save_token:"Lưu token này! Sẽ không hiển thị lại.",
+            detail:"Chi tiết",
+            sent:"Đã gửi",already_pending:"Đang có CAPTCHA chờ",
+            rename_agent:"Đổi tên Agent",add_new_agent:"Thêm Agent mới",
+            captcha_history:"Lịch sử CAPTCHA",created:"Đã tạo",
+            // Settings page
+            schedule_settings:"Lịch gửi tự động",
+            auto_send:"Bật gửi tự động",
+            auto_send_desc:"Tắt để chỉ gửi thủ công từ trang Agent",
+            min_interval:"Khoảng cách tối thiểu (giây)",
+            min_interval_desc:"Thời gian ngắn nhất giữa 2 lần gửi",
+            max_interval:"Khoảng cách tối đa (giây)",
+            max_interval_desc:"Thời gian dài nhất giữa 2 lần gửi",
+            timeout:"Thời gian chờ trả lời (giây)",
+            timeout_desc:"Quá thời gian → ghi nhận bỏ lỡ (miss)",
+            captcha_settings:"Cấu hình CAPTCHA",
+            captcha_len:"Độ dài CAPTCHA",
+            captcha_charset_label:"Bộ ký tự",
+            charset_alphanumeric:"Chữ + Số",
+            charset_numeric:"Chỉ số",
+            charset_alpha:"Chỉ chữ",
+            noise:"Mức nhiễu (0-10)",
+            noise_desc:"Càng cao CAPTCHA càng khó đọc",
+            image_settings:"Kích thước hình ảnh",
+            image_width:"Chiều rộng (px)",
+            image_height:"Chiều cao (px)",
+            skip_time:"Bỏ qua khung giờ",
+            skip_time_desc:"Định dạng: HH:MM-HH:MM, cách bằng dấu phẩy. Hỗ trợ qua đêm",
+            skip_time_ph:"VD: 12:00-13:00, 18:00-08:00",
+            // Telegram
+            telegram_settings:"Thông báo Telegram",
+            telegram_enable:"Bật thông báo Telegram",
+            telegram_desc:"Gửi trạng thái về Telegram khi agent trả lời/bỏ lỡ/gỡ phần mềm",
+            telegram_token:"Bot Token",
+            telegram_chat:"Chat ID",
+            telegram_chat_desc:"ID nhóm hoặc user. Dùng @userinfobot để lấy Chat ID",
+            // Messages
+            popup_message:"Thông báo trên popup",
+            popup_message_desc:"Hiển thị trên cửa sổ CAPTCHA của agent",
+            msg_templates:"Mẫu thông báo",
+            msg_templates_desc:"Dùng {name} = tên agent, {time} = thời gian phản hồi (ms)",
+            msg_success_label:"Trả lời đúng",
+            msg_fail_label:"Trả lời sai",
+            msg_miss_label:"Bỏ lỡ (hết giờ)",
+            msg_close_label:"Tắt popup",
+            msg_uninstall_label:"Gỡ phần mềm",
+            // Download
+            download_section:"Tải Agent",
+            download_agent:"Tải agent.exe",
+            download_desc:"File cài đặt cho máy nhân viên",
+            // History page
+            all_agents:"Tất cả Agent",
+            all_results:"Tất cả kết quả",
+        },
+        zh: {
+            dashboard:"仪表板",agents:"代理列表",settings:"设置",history:"历史记录",
+            online:"在线",offline:"离线",total_agents:"总代理",
+            miss_today:"今日错过",success:"成功",fail:"失败",miss:"错过",
+            pending:"等待中",total:"总计",avg_resp:"平均响应",success_rate:"成功率",
+            recent:"最近活动",stats:"代理统计",time:"时间",
+            agent:"代理",captcha:"验证码",answer:"回答",result:"结果",
+            resp_time:"响应时间",add_agent:"+ 添加代理",rename:"重命名",
+            delete_item:"删除",token:"令牌",last_seen:"最后在线",
+            actions:"操作",name:"名称",status:"状态",id:"编号",
+            save:"保存设置",saved:"已保存！",
+            send_captcha:"发送验证码",send_selected:"发送给已选",
+            select_all:"全选",select_agents:"至少选择1个代理",
+            confirm_delete:"删除代理\"{name}\"？所有历史记录也将被删除。",
+            no_data:"暂无数据",no_agents:"暂无代理。点击\"+ 添加代理\"创建。",
+            create:"创建",cancel:"取消",new_name:"新名称",
+            agent_name:"代理名称（例如：PC-Employee01）",
+            save_token:"保存此令牌！不会再次显示。",
+            detail:"详情",
+            sent:"已发送",already_pending:"已有等待中的验证码",
+            rename_agent:"重命名代理",add_new_agent:"添加新代理",
+            captcha_history:"验证码历史",created:"已创建",
+            // Settings page
+            schedule_settings:"自动发送计划",
+            auto_send:"启用自动发送",
+            auto_send_desc:"关闭后仅从代理页面手动发送",
+            min_interval:"最小间隔（秒）",
+            min_interval_desc:"两次发送之间的最短时间",
+            max_interval:"最大间隔（秒）",
+            max_interval_desc:"两次发送之间的最长时间",
+            timeout:"回答超时（秒）",
+            timeout_desc:"超时后记录为错过（miss）",
+            captcha_settings:"验证码配置",
+            captcha_len:"验证码长度",
+            captcha_charset_label:"字符集",
+            charset_alphanumeric:"字母 + 数字",
+            charset_numeric:"仅数字",
+            charset_alpha:"仅字母",
+            noise:"噪声级别（0-10）",
+            noise_desc:"越高越难识别",
+            image_settings:"图片尺寸",
+            image_width:"宽度（px）",
+            image_height:"高度（px）",
+            skip_time:"跳过时段",
+            skip_time_desc:"格式：HH:MM-HH:MM，逗号分隔。支持跨夜",
+            skip_time_ph:"例如：12:00-13:00, 18:00-08:00",
+            // Telegram
+            telegram_settings:"Telegram通知",
+            telegram_enable:"启用Telegram通知",
+            telegram_desc:"发送状态到Telegram（成功/失败/错过/卸载）",
+            telegram_token:"Bot Token",
+            telegram_chat:"Chat ID",
+            telegram_chat_desc:"群组或用户ID。使用 @userinfobot 获取",
+            // Messages
+            popup_message:"弹窗消息",
+            popup_message_desc:"显示在代理验证码窗口上",
+            msg_templates:"消息模板",
+            msg_templates_desc:"使用 {name} = 代理名, {time} = 响应时间 (ms)",
+            msg_success_label:"回答正确",
+            msg_fail_label:"回答错误",
+            msg_miss_label:"错过（超时）",
+            msg_close_label:"关闭弹窗",
+            msg_uninstall_label:"卸载软件",
+            // Download
+            download_section:"下载代理",
+            download_agent:"下载 agent.exe",
+            download_desc:"安装到员工电脑的客户端",
+            // History page
+            all_agents:"所有代理",
+            all_results:"所有结果",
+        }
+    };
+    let currentLang = localStorage.getItem('captcha_lang') || 'vi';
+    function t(key) { return (LANG[currentLang] && LANG[currentLang][key]) || key; }
+    function switchLang(lang) {
+        currentLang = lang;
+        localStorage.setItem('captcha_lang', lang);
+        document.querySelectorAll('[data-t]').forEach(el => {
+            if (el.tagName === 'OPTION') {
+                el.textContent = t(el.dataset.t);
+            } else {
+                el.textContent = t(el.dataset.t);
+            }
+        });
+        document.querySelectorAll('[data-tp]').forEach(el => el.placeholder = t(el.dataset.tp));
+        document.querySelectorAll('.lang-btn').forEach(b => b.classList.toggle('active', b.dataset.lang === lang));
+    }
+    </script>
+</head>
+<body>
+    <nav class="sidebar">
+        <div class="logo">CAPTCHA Monitor</div>
+        <div class="lang-switch">
+            <button class="lang-btn" data-lang="vi" onclick="switchLang('vi')">VN</button>
+            <button class="lang-btn" data-lang="zh" onclick="switchLang('zh')">CN</button>
+        </div>
+        <a href="/" class="nav-link{{if eq .Active "dashboard"}} active{{end}}" data-t="dashboard">Trang chính</a>
+        <a href="/agents" class="nav-link{{if eq .Active "agents"}} active{{end}}" data-t="agents">Danh sách Agent</a>
+        <a href="/history" class="nav-link{{if eq .Active "history"}} active{{end}}" data-t="history">Lịch sử</a>
+        <a href="/settings" class="nav-link{{if eq .Active "settings"}} active{{end}}" data-t="settings">Cài đặt</a>
+    </nav>
+    <main class="content">
+        <div id="alert-bar"></div>
+        {{template "content" .}}
+    </main>
+    <script src="/static/js/app.js"></script>
+    <script>switchLang(currentLang);</script>
+</body>
+</html>
+{{end}}

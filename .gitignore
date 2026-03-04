@@ -1,0 +1,19 @@
+# Build artifacts
+agent/build/
+server/captcha_server.exe
+server/captcha-server.exe
+server/captcha.db
+server/captcha.db-shm
+server/captcha.db-wal
+server/captcha_test.db
+server/captcha_test.db-shm
+server/captcha_test.db-wal
+
+# Logs
+*.log
+
+# IDE
+.vs/
+.vscode/
+*.suo
+*.user
