@@ -35,17 +35,16 @@ func (s *Store) Close() error {
 }
 
 func (s *Store) migrate() error {
+	// Core tables — hwid NOT in initial schema so old DBs don't fail on index
 	schema := `
 	CREATE TABLE IF NOT EXISTS agents (
 		id         TEXT PRIMARY KEY,
 		name       TEXT NOT NULL,
 		token      TEXT NOT NULL,
-		hwid       TEXT NOT NULL DEFAULT '',
 		status     TEXT DEFAULT 'offline',
 		last_seen  DATETIME,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	);
-	CREATE UNIQUE INDEX IF NOT EXISTS idx_agents_hwid ON agents(hwid) WHERE hwid != '';
 	CREATE TABLE IF NOT EXISTS captcha_history (
 		id           INTEGER PRIMARY KEY AUTOINCREMENT,
 		agent_id     TEXT REFERENCES agents(id),
@@ -68,8 +67,11 @@ func (s *Store) migrate() error {
 		return err
 	}
 
-	// Migration: add hwid column to existing agents table
+	// Migration: add hwid column to existing agents table (ignore if already exists)
 	s.db.Exec("ALTER TABLE agents ADD COLUMN hwid TEXT NOT NULL DEFAULT ''")
+
+	// Create hwid index after column is guaranteed to exist
+	s.db.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_agents_hwid ON agents(hwid) WHERE hwid != ''")
 
 	return nil
 }
