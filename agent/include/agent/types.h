@@ -21,6 +21,7 @@ enum class MessageType {
 struct AuthMessage {
     std::string agent_id;
     std::string token;
+    std::string hwid;
 };
 
 struct AuthResultMessage {

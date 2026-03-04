@@ -4,10 +4,15 @@
 
 {{define "content"}}
 <div class="page-header">
-    <h1>{{.Data.Agent.Name}} <span class="badge badge-{{if .Data.Online}}online{{else}}offline{{end}}" data-t="{{if .Data.Online}}online{{else}}offline{{end}}">{{if .Data.Online}}online{{else}}offline{{end}}</span></h1>
+    <h1 style="display:flex;align-items:center;gap:10px">
+        {{.Data.Agent.Name}}
+        <span class="badge badge-{{if .Data.Online}}online{{else}}offline{{end}}" data-t="{{if .Data.Online}}online{{else}}offline{{end}}">{{if .Data.Online}}online{{else}}offline{{end}}</span>
+    </h1>
     <div class="header-actions">
         <span class="agent-id">ID: <code>{{.Data.Agent.ID}}</code></span>
-        <button class="btn btn-primary" onclick="sendCaptchaTo('{{.Data.Agent.ID}}')" data-t="send_captcha">Gửi CAPTCHA</button>
+        {{if .Data.Agent.HWID}}<span class="agent-id" style="margin-left:8px" title="Hardware ID">HWID: <code style="font-size:11px">{{.Data.Agent.HWID}}</code></span>{{end}}
+        <button class="btn btn-primary btn-sm" onclick="sendCaptchaTo('{{.Data.Agent.ID}}')" data-t="send_captcha">Gửi CAPTCHA</button>
+        <button class="btn btn-danger btn-sm" onclick="clearAgentHistory('{{.Data.Agent.ID}}','{{.Data.Agent.Name}}')">Xoá lịch sử</button>
     </div>
 </div>
 
@@ -17,12 +22,12 @@
         <div class="stat-value">{{.Total}}</div>
         <div class="stat-label" data-t="total">Tổng</div>
     </div>
-    <div class="stat-card">
-        <div class="stat-value text-success">{{.Success}}</div>
+    <div class="stat-card stat-success">
+        <div class="stat-value">{{.Success}}</div>
         <div class="stat-label" data-t="success">Thành công</div>
     </div>
-    <div class="stat-card">
-        <div class="stat-value text-danger">{{.Fail}}</div>
+    <div class="stat-card stat-danger">
+        <div class="stat-value">{{.Fail}}</div>
         <div class="stat-label" data-t="fail">Thất bại</div>
     </div>
     <div class="stat-card stat-warning">
@@ -40,7 +45,9 @@
 </div>
 {{end}}
 
-<h2 data-t="captcha_history">Lịch sử CAPTCHA</h2>
+<div class="page-header" style="margin-top:8px">
+    <h2 data-t="captcha_history" style="margin:0;font-size:16px;font-weight:600">Lịch sử CAPTCHA</h2>
+</div>
 <table class="data-table">
     <thead>
         <tr>
@@ -49,19 +56,21 @@
             <th data-t="answer">Câu trả lời</th>
             <th data-t="result">Kết quả</th>
             <th data-t="resp_time">Thời gian PH</th>
+            <th></th>
         </tr>
     </thead>
     <tbody>
         {{range .Data.History}}
-        <tr class="result-{{.Result}}">
+        <tr class="result-{{.Result}}" id="record-{{.ID}}">
             <td>{{.SentAt.Format "2006-01-02 15:04:05"}}</td>
             <td><code>{{.CaptchaText}}</code></td>
             <td>{{if .Answer}}{{deref .Answer}}{{else}}-{{end}}</td>
             <td><span class="badge badge-{{.Result}}">{{.Result}}</span></td>
             <td>{{if .ResponseMs}}{{deref_i64 .ResponseMs}}ms{{else}}-{{end}}</td>
+            <td><button class="btn btn-danger btn-sm" onclick="deleteRecord({{.ID}})" title="Xoá">✕</button></td>
         </tr>
         {{else}}
-        <tr><td colspan="5" class="text-center" data-t="no_data">Chưa có dữ liệu</td></tr>
+        <tr><td colspan="6" class="text-center" data-t="no_data">Chưa có dữ liệu</td></tr>
         {{end}}
     </tbody>
 </table>

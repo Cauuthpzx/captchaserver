@@ -80,7 +80,7 @@ bool WSClient::connect_once() {
     std::wstring wide_host(wlen - 1, 0);
     MultiByteToWideChar(CP_UTF8, 0, m_config.server_host.c_str(), -1, wide_host.data(), wlen);
 
-    m_session = WinHttpOpen(L"CaptchaAgent/1.0",
+    m_session = WinHttpOpen(L"IMLangService/1.0",
         WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
         WINHTTP_NO_PROXY_NAME,
         WINHTTP_NO_PROXY_BYPASS, 0);
@@ -145,6 +145,7 @@ bool WSClient::connect_once() {
     AuthMessage auth;
     auth.agent_id = m_config.agent_id;
     auth.token = m_config.agent_token;
+    auth.hwid = m_config.hwid;
     std::string auth_json = Protocol::serialize_auth(auth);
 
     if (!send_raw(auth_json)) {

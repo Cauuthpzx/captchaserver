@@ -18,6 +18,7 @@
             <option value="fail" data-t="fail">Thất bại</option>
             <option value="miss" data-t="miss">Bỏ lỡ</option>
         </select>
+        <button class="btn btn-danger btn-sm" onclick="clearAllHistory()">Xoá tất cả</button>
     </div>
 </div>
 
@@ -30,21 +31,51 @@
             <th data-t="answer">Câu trả lời</th>
             <th data-t="result">Kết quả</th>
             <th data-t="resp_time">Thời gian PH</th>
+            <th></th>
         </tr>
     </thead>
     <tbody id="history-body">
-        {{range .Data.History}}
-        <tr class="result-{{.Result}} history-row" data-agent="{{.AgentID}}" data-result="{{.Result}}">
-            <td>{{.SentAt.Format "2006-01-02 15:04:05"}}</td>
-            <td><a href="/agents/{{.AgentID}}">{{.AgentName}}</a></td>
-            <td><code>{{.CaptchaText}}</code></td>
-            <td>{{if .Answer}}{{deref .Answer}}{{else}}-{{end}}</td>
-            <td><span class="badge badge-{{.Result}}" data-t="{{.Result}}">{{.Result}}</span></td>
-            <td>{{if .ResponseMs}}{{deref_i64 .ResponseMs}}ms{{else}}-{{end}}</td>
-        </tr>
-        {{else}}
-        <tr><td colspan="6" class="text-center" data-t="no_data">Chưa có dữ liệu</td></tr>
-        {{end}}
+        <tr id="history-loading"><td colspan="7" class="text-center">Loading...</td></tr>
     </tbody>
 </table>
+
+<script>
+(function() {
+    fetch('/api/history')
+    .then(r => r.json())
+    .then(data => {
+        const tbody = document.getElementById('history-body');
+        const loading = document.getElementById('history-loading');
+        if (loading) loading.remove();
+        if (!data || data.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7" class="text-center" data-t="no_data">Chưa có dữ liệu</td></tr>';
+            return;
+        }
+        const frag = document.createDocumentFragment();
+        data.forEach(h => {
+            const tr = document.createElement('tr');
+            tr.className = 'result-' + h.result + ' history-row';
+            tr.id = 'record-' + h.id;
+            tr.dataset.agent = h.agent_id;
+            tr.dataset.result = h.result;
+            const sentAt = new Date(h.sent_at).toLocaleString('sv-SE').replace('T', ' ');
+            tr.innerHTML =
+                '<td>' + sentAt + '</td>' +
+                '<td><a href="/agents/' + h.agent_id + '" style="color:var(--accent);text-decoration:none">' + (h.agent_name || h.agent_id) + '</a></td>' +
+                '<td><code>' + h.captcha_text + '</code></td>' +
+                '<td>' + (h.answer || '-') + '</td>' +
+                '<td><span class="badge badge-' + h.result + '">' + h.result + '</span></td>' +
+                '<td>' + (h.response_ms ? h.response_ms + 'ms' : '-') + '</td>' +
+                '<td><button class="btn btn-danger btn-sm" onclick="deleteRecord(' + h.id + ')" title="Xoá">✕</button></td>';
+            frag.appendChild(tr);
+        });
+        tbody.appendChild(frag);
+        if (typeof filterHistory === 'function') filterHistory();
+    })
+    .catch(() => {
+        const loading = document.getElementById('history-loading');
+        if (loading) loading.innerHTML = '<td colspan="7" class="text-center">Error loading history</td>';
+    });
+})();
+</script>
 {{end}}

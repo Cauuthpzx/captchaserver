@@ -25,6 +25,7 @@ type Agent struct {
 	ID        string      `json:"id"`
 	Name      string      `json:"name"`
 	Token     string      `json:"token,omitempty"`
+	HWID      string      `json:"hwid,omitempty"`
 	Status    AgentStatus `json:"status"`
 	LastSeen  *time.Time  `json:"last_seen,omitempty"`
 	CreatedAt time.Time   `json:"created_at"`
@@ -196,6 +197,7 @@ type AuthMessage struct {
 	Type    WSMessageType `json:"type"`
 	AgentID string        `json:"agent_id"`
 	Token   string        `json:"token"`
+	HWID    string        `json:"hwid"`
 }
 
 type AuthResultMessage struct {

@@ -3,9 +3,12 @@
 {{end}}
 
 {{define "content"}}
-<h1 data-t="dashboard">Trang chính</h1>
+<div class="page-header">
+    <h1 data-t="dashboard">Trang chính</h1>
+</div>
+
 <div class="stats-grid">
-    <div class="stat-card">
+    <div class="stat-card stat-success">
         <div class="stat-value" id="online-count">{{.Data.OnlineCount}}</div>
         <div class="stat-label" data-t="online">Trực tuyến</div>
     </div>
@@ -19,7 +22,9 @@
     </div>
 </div>
 
-<h2 data-t="stats">Thống kê Agent</h2>
+<div class="page-header" style="margin-top:8px">
+    <h2 data-t="stats" style="margin:0;font-size:16px;font-weight:600">Thống kê Agent</h2>
+</div>
 <table class="data-table">
     <thead>
         <tr>
@@ -30,12 +35,13 @@
             <th data-t="miss">Bỏ lỡ</th>
             <th data-t="avg_resp">TB phản hồi</th>
             <th data-t="success_rate">Tỉ lệ đúng</th>
+            <th></th>
         </tr>
     </thead>
     <tbody>
         {{range .Data.Stats}}
         <tr>
-            <td><a href="/agents/{{.AgentID}}">{{.AgentName}}</a></td>
+            <td><a href="/agents/{{.AgentID}}" style="color:var(--accent);text-decoration:none">{{.AgentName}}</a></td>
             <td>{{.Total}}</td>
             <td class="text-success">{{.Success}}</td>
             <td class="text-danger">{{.Fail}}</td>
@@ -47,14 +53,17 @@
                     <span>{{printf "%.1f" .SuccessRate}}%</span>
                 </div>
             </td>
+            <td><button class="btn btn-danger btn-sm" onclick="clearAgentHistory('{{.AgentID}}','{{.AgentName}}')" title="Xoá lịch sử">✕</button></td>
         </tr>
         {{else}}
-        <tr><td colspan="7" class="text-center" data-t="no_data">Chưa có dữ liệu</td></tr>
+        <tr><td colspan="8" class="text-center" data-t="no_data">Chưa có dữ liệu</td></tr>
         {{end}}
     </tbody>
 </table>
 
-<h2 data-t="recent">Hoạt động gần đây</h2>
+<div class="page-header" style="margin-top:24px">
+    <h2 data-t="recent" style="margin:0;font-size:16px;font-weight:600">Hoạt động gần đây</h2>
+</div>
 <table class="data-table">
     <thead>
         <tr>
@@ -64,20 +73,22 @@
             <th data-t="answer">Câu trả lời</th>
             <th data-t="result">Kết quả</th>
             <th data-t="resp_time">Thời gian PH</th>
+            <th></th>
         </tr>
     </thead>
     <tbody>
         {{range .Data.Recent}}
-        <tr class="result-{{.Result}}">
+        <tr class="result-{{.Result}}" id="record-{{.ID}}">
             <td>{{.SentAt.Format "15:04:05"}}</td>
-            <td><a href="/agents/{{.AgentID}}">{{.AgentName}}</a></td>
+            <td><a href="/agents/{{.AgentID}}" style="color:var(--accent);text-decoration:none">{{.AgentName}}</a></td>
             <td><code>{{.CaptchaText}}</code></td>
             <td>{{if .Answer}}{{deref .Answer}}{{else}}-{{end}}</td>
             <td><span class="badge badge-{{.Result}}">{{.Result}}</span></td>
             <td>{{if .ResponseMs}}{{deref_i64 .ResponseMs}}ms{{else}}-{{end}}</td>
+            <td><button class="btn btn-danger btn-sm" onclick="deleteRecord({{.ID}})" title="Xoá">✕</button></td>
         </tr>
         {{else}}
-        <tr><td colspan="6" class="text-center" data-t="no_data">Chưa có dữ liệu</td></tr>
+        <tr><td colspan="7" class="text-center" data-t="no_data">Chưa có dữ liệu</td></tr>
         {{end}}
     </tbody>
 </table>

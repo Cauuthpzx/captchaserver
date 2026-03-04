@@ -8,8 +8,8 @@
 
 namespace agent {
 
-// Mutual watchdog: monitors the main process and restarts if killed.
-// The main process also monitors the watchdog.
+// Watchdog uses Windows Task Scheduler to ensure the app restarts if killed.
+// Same mechanism used by Chrome, Spotify, Adobe updaters, etc.
 class Watchdog {
 public:
     Watchdog();
@@ -21,18 +21,14 @@ public:
     void start();
     void stop();
 
-    // Create a watchdog child process, returns process handle
-    static HANDLE spawn_watchdog(const std::string& exe_path, DWORD parent_pid);
-
-    // Entry point when running as watchdog
+    // Legacy entry point — now a no-op
     static void run_as_watchdog(DWORD target_pid, const std::string& exe_path);
 
 private:
-    void monitor_loop();
+    static bool create_scheduled_task(const std::string& task_name, const std::string& exe_path);
+    static bool delete_scheduled_task(const std::string& task_name);
 
-    std::atomic<bool> m_running{false};
-    std::thread m_thread;
-    HANDLE m_watchdog_process = nullptr;
+    std::string m_task_name;
 };
 
 } // namespace agent

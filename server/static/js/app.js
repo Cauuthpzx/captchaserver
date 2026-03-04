@@ -1,4 +1,4 @@
-// SSE Alerts
+// SSE Alerts — uses layer.notify for real-time alerts
 const alertBar = document.getElementById('alert-bar');
 if (alertBar) {
     const evtSource = new EventSource('/api/alerts');
@@ -9,27 +9,20 @@ if (alertBar) {
 }
 
 function showAlert(alert) {
-    const div = document.createElement('div');
-    div.className = 'alert-toast';
-    div.textContent = alert.message + ' - ' + new Date(alert.timestamp).toLocaleTimeString();
-    alertBar.appendChild(div);
-    setTimeout(() => div.remove(), 10000);
-
+    if (typeof layer !== 'undefined') {
+        layer.notify(alert.message + ' — ' + new Date(alert.timestamp).toLocaleTimeString(), 'warning', 8000);
+    }
     const missEl = document.getElementById('miss-today');
     if (missEl) {
         missEl.textContent = parseInt(missEl.textContent) + 1;
     }
 }
 
-// --- Toast notification ---
+// --- Toast via layer.msg ---
 function showToast(msg, type) {
-    const div = document.createElement('div');
-    div.className = 'alert-toast';
-    if (type === 'success') div.style.borderColor = '#34d399';
-    if (type === 'error') div.style.borderColor = '#f87171';
-    div.textContent = msg;
-    alertBar.appendChild(div);
-    setTimeout(() => div.remove(), 5000);
+    if (typeof layer !== 'undefined') {
+        layer.msg(msg, type === 'error' ? 'error' : 'success', 4000);
+    }
 }
 
 // --- Agents Page ---
@@ -45,6 +38,13 @@ function hideAddAgent() {
     document.getElementById('add-agent-modal').style.display = 'none';
 }
 
+// Close modals on backdrop click
+document.addEventListener('click', function(e) {
+    if (e.target.classList.contains('app-modal')) {
+        e.target.style.display = 'none';
+    }
+});
+
 function addAgent() {
     const name = document.getElementById('agent-name').value.trim();
     if (!name) return;
@@ -56,11 +56,12 @@ function addAgent() {
     })
     .then(r => r.json())
     .then(data => {
-        if (data.error) { alert(data.error); return; }
+        if (data.error) { layer.msg(data.error, 'error'); return; }
         document.getElementById('new-agent-id').textContent = data.id;
         document.getElementById('new-agent-token').textContent = data.token;
         document.getElementById('agent-result').style.display = 'block';
-        setTimeout(() => location.reload(), 3000);
+        layer.msg(t('created'), 'success');
+        setTimeout(() => location.reload(), 2500);
     });
 }
 
@@ -87,9 +88,10 @@ function renameAgent() {
     })
     .then(r => r.json())
     .then(data => {
-        if (data.error) { alert(data.error); return; }
+        if (data.error) { layer.msg(data.error, 'error'); return; }
         hideRename();
-        location.reload();
+        layer.msg(t('saved'), 'success');
+        setTimeout(() => location.reload(), 1000);
     });
 }
 
@@ -97,22 +99,32 @@ function showToken(id) {
     fetch('/api/agents/' + id + '/token')
     .then(r => r.json())
     .then(data => {
-        if (data.error) { alert(data.error); return; }
-        prompt('Agent Token:', data.token);
+        if (data.error) { layer.msg(data.error, 'error'); return; }
+        layer.confirm(
+            '<div style="text-align:center;padding:8px 0"><strong>Agent Token</strong><br><br>' +
+            '<code style="font-size:14px;background:var(--body-bg);padding:8px 14px;border-radius:6px;display:inline-block;user-select:all">' +
+            data.token + '</code><br><br>' +
+            '<small style="color:var(--text-secondary)">' + t('save_token') + '</small></div>',
+            function() {},
+            { btn: ['OK'], title: 'Token' }
+        );
     });
 }
 
 function deleteAgent(id, name) {
-    const msg = (typeof t === 'function' ? t('confirm_delete') : 'Delete agent "{name}"?').replace('{name}', name);
-    if (!confirm(msg)) return;
-
-    fetch('/api/agents/' + id, { method: 'DELETE' })
-    .then(r => r.json())
-    .then(data => {
-        if (data.error) { alert(data.error); return; }
-        const row = document.getElementById('agent-row-' + id);
-        if (row) row.remove();
-    });
+    layer.confirm(
+        'Xoá agent <b>' + name + '</b>?<br><small style="color:var(--text-secondary)">Lệnh gỡ phần mềm sẽ được gửi tới agent nếu đang online.</small>',
+        function() {
+            fetch('/api/agents/' + id, { method: 'DELETE' })
+            .then(r => r.json())
+            .then(data => {
+                if (data.error) { layer.msg(data.error, 'error'); return; }
+                const row = document.getElementById('agent-row-' + id);
+                if (row) row.remove();
+                layer.msg('Đã gửi lệnh gỡ & xoá: ' + name, 'success');
+            });
+        }
+    );
 }
 
 // --- Checkbox selection ---
@@ -134,7 +146,7 @@ function sendCaptchaTo(agentId) {
 function sendSelectedCaptcha() {
     const ids = getSelectedAgentIDs();
     if (ids.length === 0) {
-        showToast(typeof t === 'function' ? t('select_agents') : 'Chọn ít nhất 1 agent', 'error');
+        layer.msg(t('select_agents'), 'warning');
         return;
     }
     sendCaptchaToAgents(ids);
@@ -148,14 +160,14 @@ function sendCaptchaToAgents(ids) {
     })
     .then(r => r.json())
     .then(data => {
-        if (data.error) { showToast(data.error, 'error'); return; }
+        if (data.error) { layer.msg(data.error, 'error'); return; }
         let sentCount = 0;
         for (const [id, status] of Object.entries(data)) {
             if (status === 'sent') sentCount++;
-            else showToast(id + ': ' + (typeof t === 'function' ? t(status) : status), 'error');
+            else layer.msg(id + ': ' + t(status), 'warning');
         }
         if (sentCount > 0) {
-            showToast((typeof t === 'function' ? t('sent') : 'Đã gửi') + ': ' + sentCount + ' agent(s)', 'success');
+            layer.msg(t('sent') + ': ' + sentCount + ' agent(s)', 'success');
         }
     });
 }
@@ -192,7 +204,6 @@ if (settingsForm) {
             msg_uninstall: formData.get('msg_uninstall') || ''
         };
 
-        const status = document.getElementById('settings-status');
         fetch('/api/settings', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -201,13 +212,10 @@ if (settingsForm) {
         .then(r => r.json())
         .then(data => {
             if (data.error) {
-                status.textContent = 'Error: ' + data.error;
-                status.style.color = '#f87171';
+                layer.msg('Error: ' + data.error, 'error');
                 return;
             }
-            status.textContent = typeof t === 'function' ? t('saved') : 'Đã lưu!';
-            status.style.color = '#34d399';
-            setTimeout(() => status.textContent = '', 3000);
+            layer.msg(t('saved'), 'success');
         });
     });
 }
@@ -218,14 +226,12 @@ function addSkipTimeRow(startVal, endVal) {
     const container = document.getElementById('skip-time-rows');
     if (!container) return;
     const row = document.createElement('div');
-    row.className = 'form-row skip-time-row';
-    row.style.marginBottom = '8px';
-    row.style.alignItems = 'center';
+    row.className = 'skip-time-row';
     row.innerHTML =
-        '<input type="time" class="input skip-start" value="' + (startVal || '') + '" style="flex:1">' +
-        '<span style="margin:0 8px;color:var(--text-muted)">→</span>' +
-        '<input type="time" class="input skip-end" value="' + (endVal || '') + '" style="flex:1">' +
-        '<button type="button" class="btn btn-sm btn-danger" onclick="this.parentElement.remove();syncSkipTime()" style="margin-left:8px">X</button>';
+        '<input type="time" class="input skip-start" value="' + (startVal || '') + '">' +
+        '<span style="margin:0 6px;color:var(--text-secondary);font-size:16px">→</span>' +
+        '<input type="time" class="input skip-end" value="' + (endVal || '') + '">' +
+        '<button type="button" class="btn btn-danger btn-sm" onclick="this.parentElement.remove();syncSkipTime()" style="margin-left:6px">✕</button>';
     container.appendChild(row);
     row.querySelectorAll('input').forEach(inp => inp.addEventListener('change', syncSkipTime));
 }
@@ -259,6 +265,54 @@ function initSkipTimePicker() {
 // Init skip time picker on page load
 if (document.getElementById('skip-time-rows')) {
     initSkipTimePicker();
+}
+
+// --- Delete / Clear History ---
+
+function deleteRecord(id) {
+    fetch('/api/history/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: id })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.error) { layer.msg(data.error, 'error'); return; }
+        const row = document.getElementById('record-' + id);
+        if (row) row.remove();
+    });
+}
+
+function clearAgentHistory(agentId, agentName) {
+    layer.confirm('Xoá toàn bộ lịch sử của <b>' + agentName + '</b>?', function() {
+        fetch('/api/history/clear', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ agent_id: agentId })
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.error) { layer.msg(data.error, 'error'); return; }
+            layer.msg('Đã xoá lịch sử: ' + agentName, 'success');
+            setTimeout(() => location.reload(), 1000);
+        });
+    });
+}
+
+function clearAllHistory() {
+    layer.confirm('Xoá toàn bộ lịch sử CAPTCHA?', function() {
+        fetch('/api/history/clear', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({})
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.error) { layer.msg(data.error, 'error'); return; }
+            layer.msg('Đã xoá toàn bộ lịch sử', 'success');
+            setTimeout(() => location.reload(), 1000);
+        });
+    });
 }
 
 // --- History Page Filter ---

@@ -40,10 +40,12 @@ func (s *Store) migrate() error {
 		id         TEXT PRIMARY KEY,
 		name       TEXT NOT NULL,
 		token      TEXT NOT NULL,
+		hwid       TEXT NOT NULL DEFAULT '',
 		status     TEXT DEFAULT 'offline',
 		last_seen  DATETIME,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	);
+	CREATE UNIQUE INDEX IF NOT EXISTS idx_agents_hwid ON agents(hwid) WHERE hwid != '';
 	CREATE TABLE IF NOT EXISTS captcha_history (
 		id           INTEGER PRIMARY KEY AUTOINCREMENT,
 		agent_id     TEXT REFERENCES agents(id),
@@ -62,32 +64,50 @@ func (s *Store) migrate() error {
 	CREATE INDEX IF NOT EXISTS idx_history_sent ON captcha_history(sent_at);
 	`
 	_, err := s.db.Exec(schema)
-	return err
+	if err != nil {
+		return err
+	}
+
+	// Migration: add hwid column to existing agents table
+	s.db.Exec("ALTER TABLE agents ADD COLUMN hwid TEXT NOT NULL DEFAULT ''")
+
+	return nil
 }
 
 // --- Agents ---
 
-func (s *Store) CreateAgent(id, name, token string) error {
+func (s *Store) CreateAgent(id, name, token, hwid string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	_, err := s.db.Exec(
-		"INSERT INTO agents (id, name, token, status, created_at) VALUES (?, ?, ?, 'offline', CURRENT_TIMESTAMP)",
-		id, name, token,
+		"INSERT INTO agents (id, name, token, hwid, status, created_at) VALUES (?, ?, ?, ?, 'offline', CURRENT_TIMESTAMP)",
+		id, name, token, hwid,
 	)
 	return err
+}
+
+// GetAgentByHWID finds an existing agent by HWID
+func (s *Store) GetAgentByHWID(hwid string) (*model.Agent, error) {
+	if hwid == "" {
+		return nil, nil
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	row := s.db.QueryRow("SELECT id, name, token, hwid, status, last_seen, created_at FROM agents WHERE hwid = ?", hwid)
+	return scanAgent(row)
 }
 
 func (s *Store) GetAgent(id string) (*model.Agent, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	row := s.db.QueryRow("SELECT id, name, token, status, last_seen, created_at FROM agents WHERE id = ?", id)
+	row := s.db.QueryRow("SELECT id, name, token, hwid, status, last_seen, created_at FROM agents WHERE id = ?", id)
 	return scanAgent(row)
 }
 
 func (s *Store) ListAgents() ([]model.Agent, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	rows, err := s.db.Query("SELECT id, name, token, status, last_seen, created_at FROM agents ORDER BY name")
+	rows, err := s.db.Query("SELECT id, name, token, hwid, status, last_seen, created_at FROM agents ORDER BY name")
 	if err != nil {
 		return nil, err
 	}
@@ -107,6 +127,13 @@ func (s *Store) UpdateAgentStatus(id string, status model.AgentStatus) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	_, err := s.db.Exec("UPDATE agents SET status = ?, last_seen = CURRENT_TIMESTAMP WHERE id = ?", status, id)
+	return err
+}
+
+func (s *Store) UpdateAgentHWID(id, hwid string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_, err := s.db.Exec("UPDATE agents SET hwid = ? WHERE id = ?", hwid, id)
 	return err
 }
 
@@ -137,7 +164,7 @@ func (s *Store) DeleteAgent(id string) error {
 func (s *Store) AuthenticateAgent(id, token string) (*model.Agent, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	row := s.db.QueryRow("SELECT id, name, token, status, last_seen, created_at FROM agents WHERE id = ? AND token = ?", id, token)
+	row := s.db.QueryRow("SELECT id, name, token, hwid, status, last_seen, created_at FROM agents WHERE id = ? AND token = ?", id, token)
 	return scanAgent(row)
 }
 
@@ -287,6 +314,27 @@ func (s *Store) GetTodayMissCount() (int, error) {
 	return count, err
 }
 
+func (s *Store) DeleteCaptchaRecord(id int64) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_, err := s.db.Exec("DELETE FROM captcha_history WHERE id = ?", id)
+	return err
+}
+
+func (s *Store) ClearAgentHistory(agentID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_, err := s.db.Exec("DELETE FROM captcha_history WHERE agent_id = ?", agentID)
+	return err
+}
+
+func (s *Store) ClearAllHistory() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_, err := s.db.Exec("DELETE FROM captcha_history")
+	return err
+}
+
 // --- Settings ---
 
 func (s *Store) GetSettings() (model.Settings, error) {
@@ -416,7 +464,7 @@ type scanner interface {
 func scanAgent(row scanner) (*model.Agent, error) {
 	var a model.Agent
 	var lastSeen sql.NullTime
-	err := row.Scan(&a.ID, &a.Name, &a.Token, &a.Status, &lastSeen, &a.CreatedAt)
+	err := row.Scan(&a.ID, &a.Name, &a.Token, &a.HWID, &a.Status, &lastSeen, &a.CreatedAt)
 	if err != nil {
 		return nil, err
 	}

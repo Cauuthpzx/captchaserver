@@ -99,6 +99,11 @@ func (h *Hub) HandleWS(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Update HWID if agent sent one and it differs from stored value
+	if authMsg.HWID != "" && authMsg.HWID != agent.HWID {
+		h.store.UpdateAgentHWID(agent.ID, authMsg.HWID)
+	}
+
 	conn.WriteJSON(model.AuthResultMessage{Type: model.MsgAuthResult, Success: true})
 	conn.SetReadDeadline(time.Time{})
 

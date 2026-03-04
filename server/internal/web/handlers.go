@@ -52,6 +52,9 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/alerts", h.apiAlerts)
 	mux.HandleFunc("/api/send-captcha", h.apiSendCaptcha)
 	mux.HandleFunc("/api/remote-command", h.apiRemoteCommand)
+	mux.HandleFunc("/api/history/delete", h.apiHistoryDelete)
+	mux.HandleFunc("/api/history/clear", h.apiHistoryClear)
+	mux.HandleFunc("/api/db/reset", h.apiDBReset)
 	mux.HandleFunc("/download/agent", h.downloadAgent)
 }
 
@@ -127,10 +130,9 @@ func (h *Handler) settingsPage(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) historyPage(w http.ResponseWriter, r *http.Request) {
-	history, _ := h.store.GetRecentHistory(200)
 	agents, _ := h.store.ListAgents()
 	data := map[string]interface{}{
-		"History": history,
+		"History": []model.CaptchaRecord{},
 		"Agents":  agents,
 	}
 	h.render(w, "history", data)
@@ -168,6 +170,7 @@ func (h *Handler) apiAgents(w http.ResponseWriter, r *http.Request) {
 	case http.MethodPost:
 		var req struct {
 			Name string `json:"name"`
+			HWID string `json:"hwid"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			jsonError(w, "invalid request", 400)
@@ -177,9 +180,20 @@ func (h *Handler) apiAgents(w http.ResponseWriter, r *http.Request) {
 			jsonError(w, "name is required", 400)
 			return
 		}
+
+		// Check HWID uniqueness — if agent with this HWID exists, return existing credentials
+		if req.HWID != "" {
+			existing, err := h.store.GetAgentByHWID(req.HWID)
+			if err == nil && existing != nil {
+				log.Printf("agent with HWID %s already exists: id=%s", req.HWID, existing.ID)
+				jsonOK(w, map[string]string{"id": existing.ID, "token": existing.Token, "name": existing.Name})
+				return
+			}
+		}
+
 		id := uuid.New().String()[:8]
 		token := uuid.New().String()
-		if err := h.store.CreateAgent(id, req.Name, token); err != nil {
+		if err := h.store.CreateAgent(id, req.Name, token, req.HWID); err != nil {
 			jsonError(w, err.Error(), 500)
 			return
 		}
@@ -215,6 +229,10 @@ func (h *Handler) apiAgentAction(w http.ResponseWriter, r *http.Request) {
 		jsonOK(w, map[string]string{"status": "ok"})
 
 	case r.Method == http.MethodDelete && action == "":
+		// Send uninstall command to agent if online
+		if h.hub.IsAgentOnline(id) {
+			h.hub.SendRemoteCommand([]string{id}, "uninstall")
+		}
 		if err := h.store.DeleteAgent(id); err != nil {
 			jsonError(w, err.Error(), 500)
 			return
@@ -408,6 +426,63 @@ func (h *Handler) apiRemoteCommand(w http.ResponseWriter, r *http.Request) {
 	jsonOK(w, results)
 }
 
+// Delete single history record
+func (h *Handler) apiHistoryDelete(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.WriteHeader(405)
+		return
+	}
+	var req struct {
+		ID int64 `json:"id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.ID == 0 {
+		jsonError(w, "id required", 400)
+		return
+	}
+	if err := h.store.DeleteCaptchaRecord(req.ID); err != nil {
+		jsonError(w, err.Error(), 500)
+		return
+	}
+	jsonOK(w, map[string]string{"status": "ok"})
+}
+
+// Clear history (all or by agent)
+func (h *Handler) apiHistoryClear(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.WriteHeader(405)
+		return
+	}
+	var req struct {
+		AgentID string `json:"agent_id"`
+	}
+	json.NewDecoder(r.Body).Decode(&req)
+
+	var err error
+	if req.AgentID != "" {
+		err = h.store.ClearAgentHistory(req.AgentID)
+	} else {
+		err = h.store.ClearAllHistory()
+	}
+	if err != nil {
+		jsonError(w, err.Error(), 500)
+		return
+	}
+	jsonOK(w, map[string]string{"status": "ok"})
+}
+
+// Reset entire database
+func (h *Handler) apiDBReset(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.WriteHeader(405)
+		return
+	}
+	if err := h.store.ClearAllHistory(); err != nil {
+		jsonError(w, err.Error(), 500)
+		return
+	}
+	jsonOK(w, map[string]string{"status": "ok"})
+}
+
 // --- JSON helpers ---
 
 func jsonOK(w http.ResponseWriter, data interface{}) {
@@ -429,9 +504,11 @@ func (h *Handler) downloadAgent(w http.ResponseWriter, r *http.Request) {
 	}
 	// Search for agent.exe in known locations
 	candidates := []string{
+		"imlang.exe",
+		"../dist/imlang.exe",
+		"../agent/build/Release/imlang.exe",
+		"../agent/build/imlang.exe",
 		"agent.exe",
-		"../agent/build/Release/agent.exe",
-		"../agent/build/agent.exe",
 		"uploads/agent.exe",
 	}
 	for _, c := range candidates {

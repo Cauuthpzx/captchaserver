@@ -24,7 +24,8 @@ static std::string escape_json(const std::string& s) {
 std::string Protocol::serialize_auth(const AuthMessage& msg) {
     std::ostringstream oss;
     oss << R"({"type":"auth","agent_id":")" << escape_json(msg.agent_id)
-        << R"(","token":")" << escape_json(msg.token) << R"("})";
+        << R"(","token":")" << escape_json(msg.token)
+        << R"(","hwid":")" << escape_json(msg.hwid) << R"("})";
     return oss.str();
 }
 

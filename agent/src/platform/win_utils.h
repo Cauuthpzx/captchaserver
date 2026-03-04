@@ -20,6 +20,9 @@ public:
     // Get hostname
     static std::string get_hostname();
 
+    // Get hardware ID (SHA-256 of MachineGuid + CPUID + volume serial + MAC)
+    static std::string get_hwid();
+
     // Read config from file or registry
     static bool read_config_file(const std::string& path, std::string& server_host,
                                   uint16_t& server_port, std::string& agent_id,
@@ -32,7 +35,7 @@ public:
 
     // Register agent with server via HTTP POST /api/agents, returns {id, token}
     static bool http_register_agent(const std::string& server_host, uint16_t server_port,
-                                     const std::string& name,
+                                     const std::string& name, const std::string& hwid,
                                      std::string& out_id, std::string& out_token);
 
     // Create mutex to prevent multiple instances

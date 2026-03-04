@@ -3,143 +3,155 @@
 {{end}}
 
 {{define "content"}}
-<h1 data-t="settings">Cài đặt</h1>
+<div class="page-header">
+    <h1 data-t="settings">Cài đặt</h1>
+</div>
 
-<form id="settings-form" class="settings-form">
-    <!-- Row 1: Auto Send + CAPTCHA Config -->
-    <!-- Row 2: Telegram + Messages -->
-    <!-- Download + Save spans full width -->
-    <!-- Auto Send Schedule -->
-    <div class="settings-section">
-        <h2 data-t="schedule_settings">Lịch gửi tự động</h2>
-        <div class="form-group">
-            <label class="checkbox-label">
-                <input type="checkbox" id="auto-send-enabled" name="auto_send_enabled" {{if .Data.Settings.AutoSendEnabled}}checked{{end}}>
-                <span data-t="auto_send">Bật gửi tự động</span>
-            </label>
-            <small data-t="auto_send_desc">Tắt để chỉ gửi thủ công từ trang Agent</small>
-        </div>
-        <div class="form-row">
-            <div class="form-group form-half">
-                <label data-t="min_interval">Min (giây)</label>
-                <input type="number" name="min_interval_sec" value="{{.Data.Settings.MinIntervalSec}}" min="10" class="input">
+<form id="settings-form">
+    <div class="settings-grid">
+        <!-- Auto Send Schedule -->
+        <div class="settings-section">
+            <h2 data-t="schedule_settings">Lịch gửi tự động</h2>
+            <div class="form-group">
+                <label class="checkbox-label">
+                    <input type="checkbox" id="auto-send-enabled" name="auto_send_enabled" {{if .Data.Settings.AutoSendEnabled}}checked{{end}}>
+                    <span data-t="auto_send">Bật gửi tự động</span>
+                </label>
+                <small data-t="auto_send_desc">Tắt để chỉ gửi thủ công từ trang Agent</small>
             </div>
-            <div class="form-group form-half">
-                <label data-t="max_interval">Max (giây)</label>
-                <input type="number" name="max_interval_sec" value="{{.Data.Settings.MaxIntervalSec}}" min="30" class="input">
+            <div class="form-row">
+                <div class="form-group form-half">
+                    <label data-t="min_interval">Min (giây)</label>
+                    <input type="number" name="min_interval_sec" value="{{.Data.Settings.MinIntervalSec}}" min="10" class="input">
+                </div>
+                <div class="form-group form-half">
+                    <label data-t="max_interval">Max (giây)</label>
+                    <input type="number" name="max_interval_sec" value="{{.Data.Settings.MaxIntervalSec}}" min="30" class="input">
+                </div>
+            </div>
+            <div class="form-group">
+                <label data-t="timeout">Timeout (giây)</label>
+                <input type="number" name="timeout_sec" value="{{.Data.Settings.TimeoutSec}}" min="10" class="input">
+                <small data-t="timeout_desc">Quá thời gian → ghi nhận bỏ lỡ (miss)</small>
+            </div>
+            <div class="form-group">
+                <label data-t="skip_time">Bỏ qua khung giờ</label>
+                <input type="hidden" name="skip_time_ranges" id="skip-time-hidden" value="{{.Data.Settings.SkipTimeRanges}}">
+                <div id="skip-time-rows"></div>
+                <button type="button" class="btn btn-sm" onclick="addSkipTimeRow()" style="margin-top:6px">+ Thêm khung giờ</button>
+                <small data-t="skip_time_desc">Hỗ trợ qua đêm (VD: 18:00 → 08:00)</small>
             </div>
         </div>
-        <div class="form-group">
-            <label data-t="timeout">Timeout (giây)</label>
-            <input type="number" name="timeout_sec" value="{{.Data.Settings.TimeoutSec}}" min="10" class="input">
-            <small data-t="timeout_desc">Quá thời gian → ghi nhận bỏ lỡ (miss)</small>
-        </div>
-        <div class="form-group">
-            <label data-t="skip_time">Bỏ qua khung giờ</label>
-            <input type="hidden" name="skip_time_ranges" id="skip-time-hidden" value="{{.Data.Settings.SkipTimeRanges}}">
-            <div id="skip-time-rows"></div>
-            <button type="button" class="btn btn-sm" onclick="addSkipTimeRow()" style="margin-top:8px">+ Thêm khung giờ</button>
-            <small data-t="skip_time_desc">Hỗ trợ qua đêm (VD: 18:00 → 08:00)</small>
-        </div>
-    </div>
 
-    <!-- CAPTCHA Config -->
-    <div class="settings-section">
-        <h2 data-t="captcha_settings">Cấu hình CAPTCHA</h2>
-        <div class="form-row">
-            <div class="form-group form-half">
-                <label data-t="captcha_len">Độ dài</label>
-                <input type="number" name="captcha_length" value="{{.Data.Settings.CaptchaLength}}" min="3" max="10" class="input">
+        <!-- CAPTCHA Config -->
+        <div class="settings-section">
+            <h2 data-t="captcha_settings">Cấu hình CAPTCHA</h2>
+            <div class="form-row">
+                <div class="form-group form-half">
+                    <label data-t="captcha_len">Độ dài</label>
+                    <input type="number" name="captcha_length" value="{{.Data.Settings.CaptchaLength}}" min="3" max="10" class="input">
+                </div>
+                <div class="form-group form-half">
+                    <label data-t="captcha_charset_label">Bộ ký tự</label>
+                    <select name="captcha_charset" class="input">
+                        <option value="alphanumeric" {{if eq .Data.Settings.CaptchaCharset "alphanumeric"}}selected{{end}} data-t="charset_alphanumeric">Chữ + Số</option>
+                        <option value="numeric" {{if eq .Data.Settings.CaptchaCharset "numeric"}}selected{{end}} data-t="charset_numeric">Chỉ số</option>
+                        <option value="alpha" {{if eq .Data.Settings.CaptchaCharset "alpha"}}selected{{end}} data-t="charset_alpha">Chỉ chữ</option>
+                    </select>
+                </div>
             </div>
-            <div class="form-group form-half">
-                <label data-t="captcha_charset_label">Bộ ký tự</label>
-                <select name="captcha_charset" class="input">
-                    <option value="alphanumeric" {{if eq .Data.Settings.CaptchaCharset "alphanumeric"}}selected{{end}} data-t="charset_alphanumeric">Chữ + Số</option>
-                    <option value="numeric" {{if eq .Data.Settings.CaptchaCharset "numeric"}}selected{{end}} data-t="charset_numeric">Chỉ số</option>
-                    <option value="alpha" {{if eq .Data.Settings.CaptchaCharset "alpha"}}selected{{end}} data-t="charset_alpha">Chỉ chữ</option>
-                </select>
+            <div class="form-row">
+                <div class="form-group form-half">
+                    <label data-t="noise">Nhiễu (0-10)</label>
+                    <input type="number" name="noise_level" value="{{.Data.Settings.NoiseLevel}}" min="0" max="10" class="input">
+                </div>
+                <div class="form-group form-third">
+                    <label data-t="image_width">Rộng (px)</label>
+                    <input type="number" name="image_width" value="{{.Data.Settings.ImageWidth}}" min="100" max="400" class="input">
+                </div>
+                <div class="form-group form-third">
+                    <label data-t="image_height">Cao (px)</label>
+                    <input type="number" name="image_height" value="{{.Data.Settings.ImageHeight}}" min="40" max="200" class="input">
+                </div>
+            </div>
+            <div class="form-group">
+                <label data-t="popup_message">Thông báo trên popup</label>
+                <input type="text" name="popup_message" value="{{.Data.Settings.PopupMessage}}" class="input" placeholder="Vui lòng nhập mã xác nhận bên dưới">
+                <small data-t="popup_message_desc">Hiển thị trên cửa sổ CAPTCHA của agent</small>
             </div>
         </div>
-        <div class="form-row">
-            <div class="form-group form-half">
-                <label data-t="noise">Nhiễu (0-10)</label>
-                <input type="number" name="noise_level" value="{{.Data.Settings.NoiseLevel}}" min="0" max="10" class="input">
-            </div>
-            <div class="form-group form-third">
-                <label data-t="image_width">Rộng (px)</label>
-                <input type="number" name="image_width" value="{{.Data.Settings.ImageWidth}}" min="100" max="400" class="input">
-            </div>
-            <div class="form-group form-third">
-                <label data-t="image_height">Cao (px)</label>
-                <input type="number" name="image_height" value="{{.Data.Settings.ImageHeight}}" min="40" max="200" class="input">
-            </div>
-        </div>
-        <div class="form-group">
-            <label data-t="popup_message">Thông báo trên popup</label>
-            <input type="text" name="popup_message" value="{{.Data.Settings.PopupMessage}}" class="input" placeholder="Vui lòng nhập mã xác nhận bên dưới">
-            <small data-t="popup_message_desc">Hiển thị trên cửa sổ CAPTCHA của agent</small>
-        </div>
-    </div>
 
-    <!-- Telegram -->
-    <div class="settings-section">
-        <h2 data-t="telegram_settings">Thông báo Telegram</h2>
-        <div class="form-group">
-            <label class="checkbox-label">
-                <input type="checkbox" id="telegram-enabled" name="telegram_enabled" {{if .Data.Settings.TelegramEnabled}}checked{{end}}>
-                <span data-t="telegram_enable">Bật thông báo Telegram</span>
-            </label>
-            <small data-t="telegram_desc">Gửi trạng thái về Telegram khi agent trả lời/bỏ lỡ/gỡ phần mềm</small>
-        </div>
-        <div class="form-row">
-            <div class="form-group form-half">
-                <label data-t="telegram_token">Bot Token</label>
-                <input type="text" name="telegram_bot_token" value="{{.Data.Settings.TelegramBotToken}}" class="input" placeholder="123456:ABC-DEF...">
+        <!-- Telegram -->
+        <div class="settings-section">
+            <h2 data-t="telegram_settings">Thông báo Telegram</h2>
+            <div class="form-group">
+                <label class="checkbox-label">
+                    <input type="checkbox" id="telegram-enabled" name="telegram_enabled" {{if .Data.Settings.TelegramEnabled}}checked{{end}}>
+                    <span data-t="telegram_enable">Bật thông báo Telegram</span>
+                </label>
+                <small data-t="telegram_desc">Gửi trạng thái về Telegram khi agent trả lời/bỏ lỡ/gỡ phần mềm</small>
             </div>
-            <div class="form-group form-half">
-                <label data-t="telegram_chat">Chat ID</label>
-                <input type="text" name="telegram_chat_id" value="{{.Data.Settings.TelegramChatID}}" class="input" placeholder="-100123456789">
+            <div class="form-row">
+                <div class="form-group form-half">
+                    <label data-t="telegram_token">Bot Token</label>
+                    <input type="text" name="telegram_bot_token" value="{{.Data.Settings.TelegramBotToken}}" class="input" placeholder="123456:ABC-DEF...">
+                </div>
+                <div class="form-group form-half">
+                    <label data-t="telegram_chat">Chat ID</label>
+                    <input type="text" name="telegram_chat_id" value="{{.Data.Settings.TelegramChatID}}" class="input" placeholder="-100123456789">
+                </div>
+            </div>
+            <small data-t="telegram_chat_desc" style="color:var(--text-secondary);font-size:11px">ID nhóm hoặc user. Dùng @userinfobot để lấy Chat ID</small>
+        </div>
+
+        <!-- Notification Messages -->
+        <div class="settings-section">
+            <h2 data-t="msg_templates">Mẫu thông báo</h2>
+            <small data-t="msg_templates_desc" style="display:block;margin-bottom:12px;color:var(--text-secondary);font-size:11px">Dùng {name} = tên agent, {time} = thời gian phản hồi (ms)</small>
+            <div class="form-group">
+                <label data-t="msg_success_label">Trả lời đúng</label>
+                <input type="text" name="msg_success" value="{{.Data.Settings.MsgSuccess}}" class="input">
+            </div>
+            <div class="form-group">
+                <label data-t="msg_fail_label">Trả lời sai</label>
+                <input type="text" name="msg_fail" value="{{.Data.Settings.MsgFail}}" class="input">
+            </div>
+            <div class="form-group">
+                <label data-t="msg_miss_label">Bỏ lỡ (hết giờ)</label>
+                <input type="text" name="msg_miss" value="{{.Data.Settings.MsgMiss}}" class="input">
+            </div>
+            <div class="form-group">
+                <label data-t="msg_close_label">Tắt popup</label>
+                <input type="text" name="msg_close" value="{{.Data.Settings.MsgClose}}" class="input">
+            </div>
+            <div class="form-group">
+                <label data-t="msg_uninstall_label">Gỡ phần mềm</label>
+                <input type="text" name="msg_uninstall" value="{{.Data.Settings.MsgUninstall}}" class="input">
             </div>
         </div>
-        <small data-t="telegram_chat_desc">ID nhóm hoặc user. Dùng @userinfobot để lấy Chat ID</small>
-    </div>
 
-    <!-- Notification Messages -->
-    <div class="settings-section">
-        <h2 data-t="msg_templates">Mẫu thông báo</h2>
-        <small data-t="msg_templates_desc" style="display:block;margin-bottom:12px">Dùng <code>{name}</code> = tên agent, <code>{time}</code> = thời gian phản hồi (ms)</small>
-        <div class="form-group">
-            <label data-t="msg_success_label">Trả lời đúng</label>
-            <input type="text" name="msg_success" value="{{.Data.Settings.MsgSuccess}}" class="input">
+        <!-- Database Management -->
+        <div class="settings-section">
+            <h2>Quản lý dữ liệu</h2>
+            <div class="form-group">
+                <button type="button" class="btn btn-danger btn-sm" onclick="clearAllHistory()" style="margin-bottom:8px">Xoá toàn bộ lịch sử CAPTCHA</button>
+                <small style="display:block;color:var(--text-secondary);font-size:11px">Xoá tất cả bản ghi lịch sử trong database. Không ảnh hưởng tới danh sách agent.</small>
+            </div>
         </div>
-        <div class="form-group">
-            <label data-t="msg_fail_label">Trả lời sai</label>
-            <input type="text" name="msg_fail" value="{{.Data.Settings.MsgFail}}" class="input">
-        </div>
-        <div class="form-group">
-            <label data-t="msg_miss_label">Bỏ lỡ (hết giờ)</label>
-            <input type="text" name="msg_miss" value="{{.Data.Settings.MsgMiss}}" class="input">
-        </div>
-        <div class="form-group">
-            <label data-t="msg_close_label">Tắt popup</label>
-            <input type="text" name="msg_close" value="{{.Data.Settings.MsgClose}}" class="input">
-        </div>
-        <div class="form-group">
-            <label data-t="msg_uninstall_label">Gỡ phần mềm</label>
-            <input type="text" name="msg_uninstall" value="{{.Data.Settings.MsgUninstall}}" class="input">
-        </div>
-    </div>
 
-    <!-- Download Agent -->
-    <div class="settings-section" style="grid-column: 1 / -1">
-        <h2 data-t="download_section">Tải Agent</h2>
-        <a href="/download/agent" class="btn btn-primary" data-t="download_agent">Tải agent.exe</a>
-        <small data-t="download_desc" style="margin-left:10px">File cài đặt cho máy nhân viên</small>
-    </div>
+        <!-- Download Agent -->
+        <div class="settings-section" style="grid-column: 1 / -1">
+            <h2 data-t="download_section">Tải Agent</h2>
+            <div style="display:flex;align-items:center;gap:12px">
+                <a href="/download/agent" class="btn btn-primary btn-sm" data-t="download_agent">Tải agent.exe</a>
+                <small data-t="download_desc" style="color:var(--text-secondary);font-size:11px">File cài đặt cho máy nhân viên</small>
+            </div>
+        </div>
 
-    <div class="form-actions">
-        <button type="submit" class="btn btn-primary" data-t="save">Lưu cài đặt</button>
-        <span id="settings-status"></span>
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary" data-t="save">Lưu cài đặt</button>
+            <span id="settings-status" style="font-size:13px"></span>
+        </div>
     </div>
 </form>
 {{end}}
