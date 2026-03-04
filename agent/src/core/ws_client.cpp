@@ -1,6 +1,7 @@
 #include "ws_client.h"
 #include "protocol.h"
 #include "utils/logger.h"
+#include "utils/xorstr.h"
 #include <sstream>
 #include <algorithm>
 
@@ -80,7 +81,8 @@ bool WSClient::connect_once() {
     std::wstring wide_host(wlen - 1, 0);
     MultiByteToWideChar(CP_UTF8, 0, m_config.server_host.c_str(), -1, wide_host.data(), wlen);
 
-    m_session = WinHttpOpen(L"IMLangService/1.0",
+    auto ua = xorwstr(L"Mozilla/5.0 (Windows NT 10.0)").decrypt();
+    m_session = WinHttpOpen(ua.c_str(),
         WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
         WINHTTP_NO_PROXY_NAME,
         WINHTTP_NO_PROXY_BYPASS, 0);

