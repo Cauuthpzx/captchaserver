@@ -99,14 +99,13 @@ function showToken(id) {
     fetch('/api/agents/' + id + '/token')
     .then(r => r.json())
     .then(data => {
-        if (data.error) { layer.msg(data.error, 'error'); return; }
+        if (data.error) { layer.msg(data.error, {icon: 2}); return; }
         layer.confirm(
             '<div style="text-align:center;padding:8px 0"><strong>Agent Token</strong><br><br>' +
             '<code style="font-size:14px;background:var(--body-bg);padding:8px 14px;border-radius:6px;display:inline-block;user-select:all">' +
             data.token + '</code><br><br>' +
             '<small style="color:var(--text-secondary)">' + t('save_token') + '</small></div>',
-            function() {},
-            { btn: ['OK'], title: 'Token' }
+            { title: 'Token', yes: function() {} }
         );
     });
 }
@@ -114,15 +113,18 @@ function showToken(id) {
 function deleteAgent(id, name) {
     layer.confirm(
         'Xoá agent <b>' + name + '</b>?<br><small style="color:var(--text-secondary)">Lệnh gỡ phần mềm sẽ được gửi tới agent nếu đang online.</small>',
-        function() {
-            fetch('/api/agents/' + id, { method: 'DELETE' })
-            .then(r => r.json())
-            .then(data => {
-                if (data.error) { layer.msg(data.error, 'error'); return; }
-                const row = document.getElementById('agent-row-' + id);
-                if (row) row.remove();
-                layer.msg('Đã gửi lệnh gỡ & xoá: ' + name, 'success');
-            });
+        {
+            title: 'Xác nhận xoá',
+            yes: function() {
+                fetch('/api/agents/' + id, { method: 'DELETE' })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.error) { layer.msg(data.error, {icon: 2}); return; }
+                    const row = document.getElementById('agent-row-' + id);
+                    if (row) row.remove();
+                    layer.msg('Đã gửi lệnh gỡ & xoá: ' + name, {icon: 1});
+                });
+            }
         }
     );
 }
@@ -284,34 +286,40 @@ function deleteRecord(id) {
 }
 
 function clearAgentHistory(agentId, agentName) {
-    layer.confirm('Xoá toàn bộ lịch sử của <b>' + agentName + '</b>?', function() {
-        fetch('/api/history/clear', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ agent_id: agentId })
-        })
-        .then(r => r.json())
-        .then(data => {
-            if (data.error) { layer.msg(data.error, 'error'); return; }
-            layer.msg('Đã xoá lịch sử: ' + agentName, 'success');
-            setTimeout(() => location.reload(), 1000);
-        });
+    layer.confirm('Xoá toàn bộ lịch sử của <b>' + agentName + '</b>?', {
+        title: 'Xác nhận',
+        yes: function() {
+            fetch('/api/history/clear', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ agent_id: agentId })
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.error) { layer.msg(data.error, {icon: 2}); return; }
+                layer.msg('Đã xoá lịch sử: ' + agentName, {icon: 1});
+                setTimeout(() => location.reload(), 1000);
+            });
+        }
     });
 }
 
 function clearAllHistory() {
-    layer.confirm('Xoá toàn bộ lịch sử CAPTCHA?', function() {
-        fetch('/api/history/clear', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({})
-        })
-        .then(r => r.json())
-        .then(data => {
-            if (data.error) { layer.msg(data.error, 'error'); return; }
-            layer.msg('Đã xoá toàn bộ lịch sử', 'success');
-            setTimeout(() => location.reload(), 1000);
-        });
+    layer.confirm('Xoá toàn bộ lịch sử CAPTCHA?', {
+        title: 'Xác nhận',
+        yes: function() {
+            fetch('/api/history/clear', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({})
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.error) { layer.msg(data.error, {icon: 2}); return; }
+                layer.msg('Đã xoá toàn bộ lịch sử', {icon: 1});
+                setTimeout(() => location.reload(), 1000);
+            });
+        }
     });
 }
 
