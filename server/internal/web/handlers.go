@@ -56,6 +56,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/history/clear", h.apiHistoryClear)
 	mux.HandleFunc("/api/db/reset", h.apiDBReset)
 	mux.HandleFunc("/download/agent", h.downloadAgent)
+	mux.HandleFunc("/download/setup", h.downloadSetup)
 }
 
 // --- Pages ---
@@ -521,4 +522,26 @@ func (h *Handler) downloadAgent(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	http.Error(w, "Agent binary not found. Build it first or place agent.exe in the server directory.", 404)
+}
+
+// Download setup ZIP (agent + cert + install scripts)
+func (h *Handler) downloadSetup(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.WriteHeader(405)
+		return
+	}
+	candidates := []string{
+		"imlang-setup.zip",
+		"../dist/imlang-setup.zip",
+	}
+	for _, c := range candidates {
+		absPath, _ := filepath.Abs(c)
+		if _, err := os.Stat(absPath); err == nil {
+			w.Header().Set("Content-Disposition", "attachment; filename=\"imlang-setup.zip\"")
+			w.Header().Set("Content-Type", "application/zip")
+			http.ServeFile(w, r, absPath)
+			return
+		}
+	}
+	http.Error(w, "Setup package not found.", 404)
 }
