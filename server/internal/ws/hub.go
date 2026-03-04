@@ -124,6 +124,13 @@ func (h *Hub) registerAgent(agentID string, ac *agentConn) {
 	defer h.mu.Unlock()
 
 	if old, ok := h.agents[agentID]; ok {
+		// Clear all pending captchas from old connection (mark as miss)
+		old.mu.Lock()
+		for cid, p := range old.pending {
+			h.store.UpdateCaptchaResult(p.RecordID, nil, model.ResultMiss, nil)
+			delete(old.pending, cid)
+		}
+		old.mu.Unlock()
 		old.conn.Close()
 		if stopCh, ok := h.stopCh[agentID]; ok {
 			close(stopCh)
@@ -372,11 +379,12 @@ func (h *Hub) schedulerLoop(agentID string, stopCh chan struct{}) {
 			continue
 		}
 
-		// Don't send if pending
+		// Don't send if pending (but first clear expired ones)
 		h.mu.RLock()
 		ac, online := h.agents[agentID]
 		h.mu.RUnlock()
 		if online {
+			h.clearExpiredPending(ac, settings.TimeoutSec)
 			ac.mu.Lock()
 			hasPending := len(ac.pending) > 0
 			ac.mu.Unlock()
@@ -435,6 +443,11 @@ func (h *Hub) sendCaptchaToAgent(agentID string, settings model.Settings) {
 
 	if err := ac.writeJSON(challenge); err != nil {
 		log.Printf("send captcha error: %v", err)
+		// Clean up pending on send failure
+		ac.mu.Lock()
+		delete(ac.pending, captchaID)
+		ac.mu.Unlock()
+		h.store.UpdateCaptchaResult(recordID, nil, model.ResultMiss, nil)
 		return
 	}
 
@@ -504,6 +517,8 @@ func (h *Hub) ManualSendCaptcha(agentIDs []string) map[string]string {
 			results[id] = "not_found"
 			continue
 		}
+		// Clear expired pending captchas before checking
+		h.clearExpiredPending(ac, settings.TimeoutSec)
 		ac.mu.Lock()
 		hasPending := len(ac.pending) > 0
 		ac.mu.Unlock()
@@ -515,6 +530,25 @@ func (h *Hub) ManualSendCaptcha(agentIDs []string) map[string]string {
 		results[id] = "sent"
 	}
 	return results
+}
+
+// clearExpiredPending removes any pending captchas that have exceeded timeout + grace period
+func (h *Hub) clearExpiredPending(ac *agentConn, defaultTimeout int) {
+	ac.mu.Lock()
+	defer ac.mu.Unlock()
+	now := time.Now()
+	for id, p := range ac.pending {
+		timeout := p.TimeoutSec
+		if timeout <= 0 {
+			timeout = defaultTimeout
+		}
+		// Expire after timeout + 10s grace period
+		if now.Sub(p.SentAt) > time.Duration(timeout+10)*time.Second {
+			log.Printf("clearing expired pending captcha %s for agent %s", id, ac.agentID)
+			h.store.UpdateCaptchaResult(p.RecordID, nil, model.ResultMiss, nil)
+			delete(ac.pending, id)
+		}
+	}
 }
 
 func (h *Hub) SendConfigUpdate(settings model.Settings) {
@@ -531,8 +565,8 @@ func (h *Hub) SendConfigUpdate(settings model.Settings) {
 
 func (h *Hub) SendRemoteCommand(agentIDs []string, command string) map[string]string {
 	results := make(map[string]string)
+	var staleIDs []string
 	h.mu.RLock()
-	defer h.mu.RUnlock()
 	for _, id := range agentIDs {
 		ac, ok := h.agents[id]
 		if !ok {
@@ -545,9 +579,19 @@ func (h *Hub) SendRemoteCommand(agentIDs []string, command string) map[string]st
 		}
 		if err := ac.writeJSON(msg); err != nil {
 			results[id] = "error"
+			staleIDs = append(staleIDs, id)
 		} else {
 			results[id] = "sent"
 		}
+	}
+	h.mu.RUnlock()
+	// Close stale connections so they get cleaned up
+	for _, id := range staleIDs {
+		h.mu.RLock()
+		if ac, ok := h.agents[id]; ok {
+			ac.conn.Close()
+		}
+		h.mu.RUnlock()
 	}
 	return results
 }

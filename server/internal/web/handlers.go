@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -230,14 +231,20 @@ func (h *Handler) apiAgentAction(w http.ResponseWriter, r *http.Request) {
 		jsonOK(w, map[string]string{"status": "ok"})
 
 	case r.Method == http.MethodDelete && action == "":
-		// Send uninstall command to agent if online
-		if h.hub.IsAgentOnline(id) {
+		// Send uninstall command to agent if online, then delete from DB
+		wasOnline := h.hub.IsAgentOnline(id)
+		if wasOnline {
 			h.hub.SendRemoteCommand([]string{id}, "uninstall")
 		}
-		if err := h.store.DeleteAgent(id); err != nil {
-			jsonError(w, err.Error(), 500)
-			return
-		}
+		// Delete from DB in background after a short delay so the command has time to arrive
+		go func() {
+			if wasOnline {
+				time.Sleep(2 * time.Second)
+			}
+			if err := h.store.DeleteAgent(id); err != nil {
+				log.Printf("delete agent error: %v", err)
+			}
+		}()
 		jsonOK(w, map[string]string{"status": "deleted"})
 
 	case r.Method == http.MethodGet && action == "token":
